@@ -6,8 +6,12 @@ data/.jwt-secret
 data/uploads/*
 !data/uploads/.gitkeep
 apps/web/dist/
+*.tsbuildinfo
 dist/
 .env
+.env.local
+.env.*.local
+.env*.local
 *.log
 .DS_Store
 data/test.db

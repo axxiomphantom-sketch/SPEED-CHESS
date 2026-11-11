@@ -10,6 +10,7 @@ import { config, WEB_DIST, UPLOAD_DIR } from './config.js';
 import { db, migrate } from './db/index.js';
 import { attachUser, requireAuth, type AuthedRequest } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
+import { supabaseAuthRouter } from './routes/supabaseAuth.js';
 import { gamesRouter, playRouter } from './routes/games.js';
 import { matchmakingRouter } from './routes/play.js';
 import { learnRouter } from './routes/learn.js';
@@ -75,6 +76,8 @@ const apiLimiter = rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: tr
 const writeLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
 
 app.use('/api/auth', authLimiter, authRouter);
+// Supabase session sync/link: same limiter, mounted before the generic /api limiter.
+app.use('/api/auth/supabase', authLimiter, supabaseAuthRouter);
 app.use('/api', apiLimiter);
 
 app.get('/api/meta', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });

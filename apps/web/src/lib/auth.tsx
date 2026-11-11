@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, type Ratings, type SessionUser } from './api';
+import { isSupabaseConfigured, signOutEverywhere, syncLocalAccount } from './supabaseAuth';
 
 interface AuthState {
   user: SessionUser | null;
@@ -20,13 +21,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const mounted = useRef(true);
 
+  const loadSession = useCallback(async () => {
+    const data = await api.get<{ user: SessionUser; ratings: Ratings; unreadNotifications: number }>('/auth/me');
+    if (!mounted.current) return;
+    setUser(data.user);
+    setRatings(data.ratings);
+    setUnread(data.unreadNotifications);
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      const data = await api.get<{ user: SessionUser; ratings: Ratings; unreadNotifications: number }>('/auth/me');
-      if (!mounted.current) return;
-      setUser(data.user);
-      setRatings(data.ratings);
-      setUnread(data.unreadNotifications);
+      await loadSession();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         if (mounted.current) { setUser(null); setRatings(null); setUnread(0); }
@@ -34,18 +39,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, []);
+  }, [loadSession]);
 
   useEffect(() => {
     mounted.current = true;
-    refresh();
+    /**
+     * Boot sequence:
+     *  1. Try the normal session (covers legacy cookies and a Supabase session already synced).
+     *  2. If that fails but Supabase holds a session — for example the player refreshed the page
+     *     after confirming their email on another tab — provision the local account and retry.
+     * This removes the "verified but somehow signed out" gap without ever trusting the client.
+     */
+    const boot = async () => {
+      try {
+        await loadSession();
+      } catch {
+        if (isSupabaseConfigured) {
+          const synced = await syncLocalAccount();
+          if (synced.ok) {
+            try { await loadSession(); } catch { /* fall through to signed-out state */ }
+          }
+        }
+        if (mounted.current) { setUser(null); setRatings(null); setUnread(0); }
+      } finally {
+        if (mounted.current) setLoading(false);
+      }
+    };
+    void boot();
     return () => { mounted.current = false; };
-  }, [refresh]);
+  }, [loadSession]);
 
   const logout = useCallback(async () => {
-    await api.post('/auth/logout');
+    // Clears the Supabase session *and* the API session; either alone would leave a half-login.
+    await signOutEverywhere();
     setUser(null);
     setRatings(null);
+    setUnread(0);
   }, []);
 
   const value = useMemo<AuthState>(

@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { db, nowIso } from '../db/index.js';
 import { id, sha256, token } from './ids.js';
+import { isSupabaseConfigured, readSupabaseUser } from './supabase.js';
+import { findBySupabaseId } from '../services/supabaseUsers.js';
 
 export type Role = 'player' | 'coach' | 'organizer' | 'moderator' | 'admin';
 
@@ -29,6 +31,8 @@ interface UserRow {
 
 export interface AuthedRequest extends Request {
   user?: UserRow & { sessionId: string };
+  /** Set when the request carried a verified Supabase access token. */
+  supabaseUserId?: string;
 }
 
 export function toPublicUser(row: Partial<UserRow> & { id: string; username: string; role: Role; status: string }): PublicUser {
@@ -88,11 +92,39 @@ export function resolveSession(signed: string | undefined): (UserRow & { session
   return { ...user, sessionId: session.id };
 }
 
-/** Populates req.user when a valid session cookie is present. Never rejects. */
-export function attachUser(req: AuthedRequest, _res: Response, next: NextFunction) {
+/**
+ * Populates req.user from either credential:
+ *   1. the Supabase session cookie, verified server-side with `getClaims()` (preferred), or
+ *   2. the legacy `sc_session` cookie, for accounts that predate Supabase.
+ *
+ * Never rejects — route-level `requireAuth` does that. Supabase tokens are verified on every
+ * request, so this is an identity check, not a "is a cookie present" check.
+ */
+export function attachUser(req: AuthedRequest, res: Response, next: NextFunction) {
   const resolved = resolveSession(req.cookies?.[COOKIE_NAME]);
-  if (resolved) req.user = resolved;
-  next();
+  if (resolved) { req.user = resolved; return next(); }
+
+  if (!isSupabaseConfigured()) return next();
+  void (async () => {
+    try {
+      const verified = await readSupabaseUser(req, res);
+      if (!verified) return next();
+      // Unverified email addresses must not reach protected areas.
+      const local = findBySupabaseId(verified.id);
+      if (local) {
+        req.user = { ...local, sessionId: 'supabase' };
+        req.supabaseUserId = verified.id;
+      } else {
+        // No local row yet (first sign-in before /auth/supabase/sync). Until the player has a
+        // chess profile they can only reach the sync endpoint, which creates it.
+        req.supabaseUserId = verified.id;
+      }
+      next();
+    } catch (err) {
+      console.error('[auth] supabase verification failed:', err);
+      next();
+    }
+  })();
 }
 
 export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {

@@ -17,6 +17,12 @@ export function migrate(): void {
   if (!gameColumns.includes('owner_id')) {
     db.exec('ALTER TABLE games ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL');
   }
+  const userColumns = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map(c => c.name);
+  if (!userColumns.includes('supabase_user_id')) {
+    // SQLite cannot add a UNIQUE column via ALTER TABLE, so add it plus a unique index.
+    db.exec('ALTER TABLE users ADD COLUMN supabase_user_id TEXT');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase ON users(supabase_user_id) WHERE supabase_user_id IS NOT NULL');
+  }
   db.prepare("INSERT OR IGNORE INTO schema_migrations (id) VALUES ('001_init')").run();
 }
 

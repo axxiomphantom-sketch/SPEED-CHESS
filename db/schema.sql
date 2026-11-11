@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified    INTEGER NOT NULL DEFAULT 0,
   verification_token TEXT,
   password_hash     TEXT NOT NULL,
+  -- Supabase auth.users.id when this account is managed by Supabase Auth.
+  -- Credentials then live in Supabase; this row only owns the chess data.
+  supabase_user_id  TEXT UNIQUE,
   role              TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player','coach','organizer','moderator','admin')),
   status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','restricted','suspended','deleted')),
   country           TEXT,

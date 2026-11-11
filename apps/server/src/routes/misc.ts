@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { config } from '../config.js';
+import { emailConfigured } from '../lib/mailer.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { requireAuth, type AuthedRequest } from '../lib/auth.js';
@@ -33,6 +35,23 @@ metaRouter.get('/', (_req, res) => {
 
 metaRouter.get('/health', (_req, res) => {
   res.json({ ok: true, uptimeSeconds: Math.round(process.uptime()), version: '1.0.0' });
+});
+
+/**
+ * Public runtime configuration for the client.
+ *
+ * Only ever exposes booleans and *publishable* values. Keys stay on the server: the browser learns
+ * whether Supabase is wired up, never the credentials the server uses.
+ */
+metaRouter.get('/config', (_req, res) => {
+  res.json({
+    supabase: {
+      configured: Boolean(config.supabaseUrl && config.supabasePublishableKey),
+      url: config.supabaseUrl || null,
+    },
+    emailConfigured: emailConfigured(),
+    paymentsConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
+  });
 });
 
 metaRouter.get('/search', (req: AuthedRequest, res) => {

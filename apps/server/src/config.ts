@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// Must run before any process.env read below (and before lib/supabase.ts is imported).
+import './lib/loadEnv.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, '../../..');
@@ -36,4 +38,8 @@ export const config = {
     : path.join(DATA_DIR, 'speed-chess.db'),
   allowEmailVerificationBypass: process.env.EMAIL_VERIFICATION_REQUIRED !== 'true',
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
+  /** Supabase project URL (public). Empty string when unset so nothing invents a hostname. */
+  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '',
+  /** Publishable/anon key. Never a service-role key: this value is also shipped to the browser. */
+  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '',
 };

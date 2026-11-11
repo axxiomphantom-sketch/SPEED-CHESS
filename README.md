@@ -92,8 +92,10 @@ Everything in this table is wired end to end: UI → HTTP/WebSocket → service 
 * Coaching centre with profiles, assignments, submissions and feedback.
 
 ### Platform
-* Session auth (scrypt, server-side sessions, HTTP-only cookies), email verification and password
-  reset with real SMTP when configured.
+* **Supabase Auth** for identity (sign-up, email verification, password reset, session refresh) with
+  `@supabase/ssr` cookie sessions verified server-side via `getClaims()`; see
+  [`docs/SUPABASE.md`](docs/SUPABASE.md). Chess data stays in the app database, so nothing was migrated.
+  Without Supabase configured the built-in scrypt sessions take over and the UI says so.
 * Library of support articles/FAQ, legal pages, subscription plans with an honest "integration
   required" response when no payment provider is configured.
 * Admin dashboard: live counters, 14-day charts, user management, moderation queue with written
@@ -119,8 +121,11 @@ apps/web        React 18 + Vite 7 + React Router 7 single-page client
   src/components  design-system primitives, board, layout, markdown renderer
   src/hooks       websocket game sync, synthesised chess sounds
 apps/server     Express + better-sqlite3 API, WebSocket hub, services, routes
+  src/lib/supabase.ts      per-request Supabase client; verifies sessions with getClaims()
+  src/services/supabaseUsers.ts  maps auth.users.id -> local users row (chess data ownership)
 packages/engine chess rules (chess.js), evaluation, search, opening book, game analysis
 db/schema.sql   40-table relational schema (see docs/SCHEMA.md)
+supabase/schema.sql  profiles table, sign-up trigger and RLS policies (see docs/SUPABASE.md)
 docs            API.md · SCHEMA.md · DEPLOYMENT.md
 ```
 

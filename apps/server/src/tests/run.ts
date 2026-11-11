@@ -15,6 +15,7 @@ import { matchmaker, windowFor } from '../services/matchmaking.js';
 import { readable, hasAnalysisEntitlement } from '../routes/games.js';
 import { generateSwissRound, startRoundGames, tournamentStandings } from '../services/tournaments.js';
 import { seedReferenceContent } from '../db/reference.js';
+import { registerSupabaseBridgeSuite } from './supabaseBridge.js';
 
 migrate();
 seedReferenceContent();
@@ -31,6 +32,8 @@ const newUser = (suffix: string) => {
 
 /* ------------------------------------------------------------------ */
 async function main() {
+// Needs the schema to exist, so it is registered here rather than at import time.
+registerSupabaseBridgeSuite();
 suite('Chess rules (chess.js integration)', () => {
   test('detects checkmate — back-rank mate', () => {
     const chess = new Chess('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
