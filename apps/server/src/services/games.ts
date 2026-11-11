@@ -63,6 +63,8 @@ function usernameOf(userId: string): string {
 export interface CreateGameOptions {
   whiteId?: string | null;
   blackId?: string | null;
+  /** Set for games where a player owns the record without playing a colour (local hot-seat, imports). */
+  ownerId?: string | null;
   mode: 'computer' | 'online' | 'local' | 'tournament';
   seconds: number;
   increment: number;
@@ -84,11 +86,12 @@ export function createGame(opts: CreateGameOptions): GameRow {
   const blackName = opts.blackName ?? (opts.blackId ? usernameOf(opts.blackId)
     : opts.mode === 'computer' ? `Computer (${opts.difficulty ?? 'easy'})` : 'Black');
   db.prepare(
-    `INSERT INTO games (id, white_id, black_id, white_name, black_name, white_rating, black_rating, mode, rated, category,
+    `INSERT INTO games (id, white_id, black_id, owner_id, white_name, black_name, white_rating, black_rating, mode, rated, category,
        initial_seconds, increment, difficulty, fen, status, white_clock_ms, black_clock_ms, turn, tournament_id, is_private, invite_code, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
-    gameId, opts.whiteId ?? null, opts.blackId ?? null, whiteName, blackName, whiteRating, blackRating,
+    gameId, opts.whiteId ?? null, opts.blackId ?? null, opts.ownerId ?? opts.whiteId ?? opts.blackId ?? null,
+    whiteName, blackName, whiteRating, blackRating,
     opts.mode, opts.rated ? 1 : 0, category, opts.seconds, opts.increment, opts.difficulty ?? null, START_FEN, 'active',
     opts.seconds * 1000, opts.seconds * 1000, 'w', opts.tournamentId ?? null, opts.isPrivate ? 1 : 0,
     opts.isPrivate ? shortCode(6) : null, nowIso(),

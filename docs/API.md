@@ -74,7 +74,7 @@ Transports run with `disableFileAccess` and `disableUrlAccess`. `GET /admin/over
 | GET | `/play/levels` | 🔓 | Computer difficulty levels with real engine settings. |
 | POST | `/play/games` | 🔐 | Create a game. `{ mode: 'computer'\|'local'\|'friend'\|'online', category, seconds, increment, rated, color?, difficulty?, private? }`. |
 | POST | `/play/games/join` | 🔐 | `{ code }` join a private game by invite code. |
-| GET | `/games/:id` | 🔓 | Full game payload (players, clocks, FEN, PGN, move list, `viewerSide`). Live games are readable by anyone with the link (spectating); **finished** games return 403 to non-players, and private games return 403 to everyone else. |
+| GET | `/games/:id` | 🔓 | Full game payload (players, clocks, FEN, PGN, move list, `viewerSide`). Live games are readable by anyone with the link (spectating), and finished **online/tournament** games stay public so results are verifiable; private games and finished casual/local/computer games return 403 to non-players. The same rule applies to `/pgn`, `/analysis` and `/moves`. |
 | POST | `/games/:id/move` | 🔐 | `{ from, to, promotion? }` — **all legality is validated server-side**; rejects wrong turn, illegal move, or a finished game. |
 | POST | `/games/:id/engine-move` | 🔐 | Only accepted when it is Black's turn in a computer game. |
 | POST | `/games/:id/resign` | 🔐 | Ends the game, applies ratings once. |
@@ -82,8 +82,8 @@ Transports run with `disableFileAccess` and `disableUrlAccess`. `GET /admin/over
 | POST | `/games/:id/draw/decline` | 🔐 | Declines a pending offer. |
 | POST | `/games/:id/abort` | 🔐 | Aborts before a meaningful number of moves; never rated. |
 | GET | `/games/:id/pgn` | 🔓 | `text/plain` PGN download. |
-| GET | `/games/:id/analysis` | 🔐 | Cached engine review: per-ply eval, classification, best move, accuracy, counts, opening, summary. |
-| GET | `/games/:id/moves` | 🔓 | Lightweight move list for polling fallbacks. |
+| GET | `/games/:id/analysis` | 🔐 | Cached engine review: per-ply eval, classification, best move, accuracy, counts, opening, summary. Computer games are always full. For online/casual games a Free plan receives the real headline numbers plus `{ locked: true, moves: [], previewMoves: [2], upgradeRequired: true }`; Premium/Pro/staff receive `moves`. `?refresh=1` recomputes. |
+| GET | `/games/:id/moves` | 🔓 | Lightweight move list for polling fallbacks (same visibility rule as `/games/:id`). |
 
 Errors: `400` invalid payload, `403` not your game, `404` unknown game, `409` game already finished.
 
@@ -142,7 +142,7 @@ two API instances behind a load balancer still pair correctly.
 | GET | `/openings/repertoire/mine` | 🔐 | Saved openings. |
 | POST | `/openings/practice` | 🔐 | Starts a practice game from an opening. |
 | GET | `/history` | 🔐 | `?limit=&offset=&category=&outcome=&mode=` paginated games with accuracy. |
-| POST | `/history/import` | 🔐 | `{ pgn }` → imports a private, unrated game and returns its id for analysis. |
+| POST | `/history/import` | 🔐 | `{ pgn }` → imports a private, unrated game owned by the caller (`1-0`/`0-1`/`1/2-1/2`/`*` mapped to `white`/`black`/`draw`/unknown) and returns `{ gameId, moves }` for analysis. |
 
 ## 9. Tournaments
 
@@ -281,3 +281,21 @@ fair-play block) · `404` unknown resource · `409` state conflict · `413` payl
 * Push notifications and native mobile apps are out of scope.
 * OAuth/SSO sign-in is not implemented (email + password only).
 * Puzzle and analysis engines are the in-house ones in `packages/engine`; no external Stockfish.
+
+## 16. Notes on fairness-sensitive endpoints
+
+* **Game visibility.** Live games are readable by anyone with the link (spectating), and finished
+  *online/tournament* games stay public so a leaderboard result can be checked. Private games, and
+  finished hot-seat/local/computer games, are readable only by the two players or by the
+  `owner_id` who created them — the same rule applies to `/games/:id`, `/pgn`, `/analysis` and
+  `/moves`.
+* **Paid analysis is a real gate, not a mock.** The engine work is done either way; a Free plan simply
+  is not sent the per-move breakdown, and the response says `upgradeRequired: true`.
+* **Analysis is post-game only.** `/games/:id/analysis` returns `409` while a game is active, and the
+  coach refuses (`403`) to analyse a position from your own active rated game.
+* **Matches are server-authoritative.** `/matchmaking/join` never seats a player who already has an
+  active online game; it returns `{ alreadyPlaying: true, game }` so the client reopens the board.
+* **Results are computed, not submitted.** All game terminations (`checkmate`, `timeout`, `resignation`,
+  `stalemate`, `repetition`, `fifty-move`, `insufficient`, `abandoned`) are decided by the service.
+  The one exception is `POST /tournaments/:id/result` (organizer/admin only) for offline boards; it
+  is written to `audit_logs` as `tournament.result_recorded` with the acting account.

@@ -14,6 +14,9 @@ interface ClassifiedMove {
 
 interface AnalysisPayload {
   moves: ClassifiedMove[];
+  /** True when the full breakdown needs Premium; the headline numbers are still real. */
+  locked?: boolean;
+  previewMoves?: ClassifiedMove[];
   positions: string[];
   evalsWhite: number[];
   accuracyWhite: number;
@@ -56,7 +59,10 @@ export function Analysis() {
     setLoading(true);
     setError('');
     api.get<{ analysis: AnalysisPayload }>(`/games/${gameId}/analysis`)
-      .then(res => { setAnalysis(res.analysis); setPly(res.analysis.moves.length); })
+      .then(res => {
+        setAnalysis(res.analysis);
+        setPly(Math.max(0, res.analysis.positions.length - 1));
+      })
       .catch(err => setError(err instanceof ApiError ? err.message : 'Analysis failed.'))
       .finally(() => setLoading(false));
   }, [gameId]);
@@ -67,7 +73,10 @@ export function Analysis() {
     return analysis.positions[Math.min(ply, analysis.positions.length - 1)];
   }, [analysis, ply]);
 
-  const move = analysis && ply > 0 ? analysis.moves[ply - 1] : null;
+  // Stepping is driven by the stored positions, so a locked (Premium) report can still be walked
+  // through even though its per-move detail is withheld.
+  const totalPlies = analysis ? Math.max(0, analysis.positions.length - 1) : 0;
+  const move = analysis && ply > 0 ? analysis.moves[ply - 1] ?? null : null;
   const evalCp = analysis ? analysis.evalsWhite[Math.min(ply, analysis.evalsWhite.length - 1)] : 0;
   const evalPercent = Math.max(3, Math.min(97, 50 + (evalCp / 1000) * 50));
 
@@ -151,7 +160,7 @@ export function Analysis() {
           <div className="row" style={{ gap: 22 }}>
             <div className="stat"><span className="stat-value" style={{ color: '#86efac' }}>{analysis.accuracyWhite}%</span><span className="stat-label">White accuracy</span></div>
             <div className="stat"><span className="stat-value" style={{ color: '#fca5a5' }}>{analysis.accuracyBlack}%</span><span className="stat-label">Black accuracy</span></div>
-            <div className="stat"><span className="stat-value">{analysis.moves.length}</span><span className="stat-label">Moves analysed</span></div>
+            <div className="stat"><span className="stat-value">{totalPlies}</span><span className="stat-label">Moves analysed</span></div>
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             {Object.entries(analysis.counts).map(([key, value]) => (
@@ -161,6 +170,22 @@ export function Analysis() {
         </div>
         <p className="small mt-2" style={{ color: '#d6d6de', margin: '12px 0 0' }}>{analysis.summary}</p>
       </Card>
+
+      {analysis.locked && (
+        <Card className="mb-2" style={{ marginBottom: 16 }}>
+          <div className="row-between wrap" style={{ gap: 12 }}>
+            <div>
+              <strong>Move-by-move review is a Premium feature</strong>
+              <p className="small muted" style={{ margin: '6px 0 0' }}>
+                Accuracy, the evaluation graph and the opening name above are real results from this game.
+                Upgrade to unlock each move's classification, the best move you missed and written insights.
+                Games against the computer stay free.
+              </p>
+            </div>
+            <Link to="/pricing" className="btn btn-primary btn-sm">See plans</Link>
+          </div>
+        </Card>
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', alignItems: 'start' }}>
         <div>
@@ -181,8 +206,8 @@ export function Analysis() {
             <div className="row" style={{ gap: 6 }}>
               <Button size="sm" variant="secondary" onClick={() => setPly(0)} disabled={ply === 0}>Start</Button>
               <Button size="sm" variant="ghost" onClick={() => setPly(p => Math.max(0, p - 1))} disabled={ply === 0} icon={<ChevronLeft size={15} />}>Prev</Button>
-              <Button size="sm" variant="ghost" onClick={() => setPly(p => Math.min(analysis.moves.length, p + 1))} disabled={ply >= analysis.moves.length}>Next <ChevronRight size={15} /></Button>
-              <Button size="sm" variant="secondary" onClick={() => setPly(analysis.moves.length)}>End</Button>
+              <Button size="sm" variant="ghost" onClick={() => setPly(p => Math.min(totalPlies, p + 1))} disabled={ply >= totalPlies}>Next <ChevronRight size={15} /></Button>
+              <Button size="sm" variant="secondary" onClick={() => setPly(totalPlies)}>End</Button>
             </div>
             <span className="small" style={{ fontWeight: 700, color: evalCp > 40 ? '#e8e6ef' : evalCp < -40 ? '#c084fc' : 'var(--muted)' }}>
               {evalCp > 0 ? '+' : ''}{(evalCp / 100).toFixed(2)} {Math.abs(evalCp) < 40 ? '(equal)' : evalCp > 0 ? 'White' : 'Black'}
@@ -232,6 +257,12 @@ export function Analysis() {
 
           <Card>
             <CardHead title="What this game teaches" action={<Sparkles size={15} style={{ color: 'var(--lavender)' }} />} />
+            {analysis.locked ? (
+              <p className="small muted" style={{ margin: 0 }}>
+                Written insights come from the move-by-move review, so they unlock with Premium. Your
+                accuracy numbers above are already exact.
+              </p>
+            ) : (
             <div className="stack" style={{ gap: 10 }}>
               {buildInsights(analysis).map(insight => (
                 <div key={insight.title} className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
@@ -243,6 +274,7 @@ export function Analysis() {
                 </div>
               ))}
             </div>
+            )}
             <div className="row mt-2">
               <Link to="/coach" className="btn btn-secondary btn-sm"><Bot size={14} /> Ask the coach</Link>
               <Link to="/training" className="btn btn-ghost btn-sm">Train this weakness</Link>

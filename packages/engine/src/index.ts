@@ -39,7 +39,15 @@ export function chooseComputerMove(fen: string, level: string): { move: Move | n
   const legal = chess.moves({ verbose: true });
   if (legal.length === 0) return { move: null, score: 0, nodes: 0 };
 
-  // Never randomly walk into mate-in-one or give the queen away when alternatives exist.
+  // Take a checkmate when it is on the board. No difficulty level should ever decline mate.
+  const mates = legal.filter(m => {
+    const probe = new Chess(fen);
+    probe.move(m);
+    return probe.isCheckmate();
+  });
+  if (mates.length > 0) return { move: mates[0], score: 99000, nodes: 1 };
+
+  // Never randomly walk into mate-in-one when alternatives exist.
   const safeMoves = legal.filter(m => {
     const probe = new Chess(fen);
     probe.move(m);
@@ -179,10 +187,14 @@ export function analyseGame(pgn: string) {
     const afterChess = new Chess(fenAfter);
     const deliveredMate = afterChess.isCheckmate();
     const searchRes = deliveredMate ? { move: null, score: 99000, depth: 0, nodes: 0 } : search(before, 3, 120000);
-    const afterScore = evaluate(afterChess);          // from opponent's perspective
-    const playedStm = -afterScore;
+    // Grade the move by searching the position it created — a static evaluation cannot see that a
+    // move allows mate in one, so comparing against `evaluate()` would call such a move "good".
+    // The resulting score is from the opponent's perspective, hence the negation.
+    const afterSearch = deliveredMate ? 99000 : search(fenAfter, 3, 80000).score;
+    const playedStm = deliveredMate ? 99000 : -afterSearch;
     const lossStm = deliveredMate ? 0 : Math.max(0, Math.round(searchRes.score - playedStm));
-    if (moverIsWhite) cpLossWhite += lossStm; else cpLossBlack += lossStm;
+    const cappedLoss = Math.min(lossStm, 300);
+    if (moverIsWhite) cpLossWhite += cappedLoss; else cpLossBlack += cappedLoss;
     if (book) bookPlies++;
     let classification: ClassifiedMove['classification'];
     if (deliveredMate) classification = 'best';
@@ -205,6 +217,8 @@ export function analyseGame(pgn: string) {
 
   const wMoves = Math.max(1, Math.ceil(history.length / 2));
   const bMoves = Math.max(1, Math.floor(history.length / 2));
+  // Accuracy is a per-move average, so it uses capped loss: one hang-the-queen move should not
+  // zero the score for an otherwise clean game (its raw loss is capped at mate score).
   const accuracy = (loss: number, n: number) => {
     const avg = loss / n;
     return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-avg / 130))));

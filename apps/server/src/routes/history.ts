@@ -16,8 +16,8 @@ historyRouter.get('/', requireAuth, (req: AuthedRequest, res) => {
   const limit = Math.min(Number(req.query.limit ?? 20), 100);
   const offset = Math.max(Number(req.query.offset ?? 0), 0);
 
-  let where = `(white_id = ? OR black_id = ?) AND status = 'finished'`;
-  const params: unknown[] = [uid, uid];
+  let where = `(white_id = ? OR black_id = ? OR owner_id = ?) AND status = 'finished'`;
+  const params: unknown[] = [uid, uid, uid];
   if (category && ['bullet', 'blitz', 'rapid', 'classical'].includes(category)) { where += ' AND category = ?'; params.push(category); }
   if (mode && ['computer', 'online', 'local', 'tournament'].includes(mode)) { where += ' AND mode = ?'; params.push(mode); }
   if (outcome === 'win') where += ` AND ((white_id = ? AND result = 'white') OR (black_id = ? AND result = 'black'))`;
@@ -72,13 +72,17 @@ historyRouter.post('/import', requireAuth, (req: AuthedRequest, res) => {
   if (history.length === 0) return res.status(400).json({ error: 'That PGN contains no moves' });
   const headers = chess.header();
   const gameId = id('gm_');
+  // PGN results use 1-0 / 0-1 / 1/2-1/2 / *; the games table stores who won.
+  const resultTag = String(headers.Result ?? '*');
+  const result = resultTag === '1-0' ? 'white' : resultTag === '0-1' ? 'black'
+    : resultTag === '1/2-1/2' || resultTag === '½-½' ? 'draw' : null;
   const seconds = 600;
   db.prepare(
-    `INSERT INTO games (id, white_id, black_id, white_name, black_name, mode, rated, category, initial_seconds, increment,
+    `INSERT INTO games (id, white_id, black_id, owner_id, white_name, black_name, mode, rated, category, initial_seconds, increment,
       fen, status, result, termination, white_clock_ms, black_clock_ms, turn, pgn, started_at, finished_at, is_private)
-     VALUES (?,?,?,?,?, 'local', 0, 'rapid', ?, 0, ?, 'finished', ?, 'imported', ?, ?, ?, ?, datetime('now'), datetime('now'), 1)`
-  ).run(gameId, req.user!.id, null, String(headers.White ?? 'White'), String(headers.Black ?? 'Black'), seconds,
-    new Chess().fen(), String(headers.Result ?? '*'), seconds * 1000, seconds * 1000, 'w', buildPgnFromHistory(history, { White: String(headers.White ?? 'White'), Black: String(headers.Black ?? 'Black'), Result: String(headers.Result ?? '*'), Event: String(headers.Event ?? 'Imported') }));
+     VALUES (?,?,?,?,?,?, 'local', 0, 'rapid', ?, 0, ?, 'finished', ?, 'imported', ?, ?, ?, ?, datetime('now'), datetime('now'), 1)`
+  ).run(gameId, req.user!.id, null, req.user!.id, String(headers.White ?? 'White'), String(headers.Black ?? 'Black'), seconds,
+    new Chess().fen(), result, seconds * 1000, seconds * 1000, 'w', buildPgnFromHistory(history, { White: String(headers.White ?? 'White'), Black: String(headers.Black ?? 'Black'), Result: String(headers.Result ?? '*'), Event: String(headers.Event ?? 'Imported') }));
   const insertMove = db.prepare(
     'INSERT INTO moves (game_id, ply, san, uci, fen_after, clock_white_ms, clock_black_ms, is_check, is_capture) VALUES (?,?,?,?,?,?,?,?,?)'
   );

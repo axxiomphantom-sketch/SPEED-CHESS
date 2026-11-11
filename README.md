@@ -52,12 +52,21 @@ Everything in this table is wired end to end: UI → HTTP/WebSocket → service 
   clocks and rules, then writes the move and FEN.
 * **Online play** with matchmaking that widens by 60 rating points every 3 seconds (any rating after
   20 s; unrated games ignore rating entirely) and a long-poll fallback that survives WebSocket loss.
+  Finished games are private unless they were played online, so a hot-seat game's result cannot be
+  used as a fake rating win.
 * **Computer play** with five genuine difficulty levels (`beginner` … `expert`: depth 1–5,
   blunder probabilities, capture quiescence) powered by the in-house engine in `packages/engine`.
+  Every level takes a mate when one is on the board — a beginner misses tactics, never a mate.
 * **Local hot-seat play**, private invite links, direct challenges, resign / draw offer / abort.
 * **Clocks** tick server-side; a timeout finishes the game and updates ratings.
 * **Game review** with per-ply evaluation, classification (brilliant → blunder), accuracy, opening
-  name and written insights; PGN import and export.
+  name and written insights. It searches the position each move created, so a move that allows
+  mate in one is graded a blunder instead of "good"; PGN import and export (imports are owned by
+  the player who pasted them, so they appear in History and can be reviewed).
+* **Plan entitlements that really gate something.** Games against the computer are always fully
+  reviewable; for online/casual games a Free plan sees real accuracy, the evaluation graph and the
+  opening name, while the per-move breakdown and written insights require Premium/Pro. The response
+  says `upgradeRequired` instead of pretending the data is missing.
 
 ### Learn
 * **How to Play Academy** — board basics, piece recognition, movement, special moves, capturing and
@@ -89,7 +98,7 @@ Everything in this table is wired end to end: UI → HTTP/WebSocket → service 
   required" response when no payment provider is configured.
 * Admin dashboard: live counters, 14-day charts, user management, moderation queue with written
   resolutions, content approval, tournament oversight, platform settings and an audit log.
-* 42 automated tests, typechecked frontend and backend, dependency audit clean.
+* 47 automated tests, typechecked frontend and backend, dependency audit clean.
 
 ## Deliberately not simulated
 
@@ -127,7 +136,7 @@ important happens only in the browser.
 | `npm run build` | Build the client into `apps/web/dist` |
 | `npm start` | Serve API + built client on `:4000` |
 | `npm run seed` | Demo accounts, reference content, demo games |
-| `npm test` | 42-test suite (rules, service, auth, puzzles, matchmaking, tournaments, DB) |
+| `npm test` | 47-test suite (rules, service, auth, puzzles, matchmaking, tournaments, DB) |
 | `npm run typecheck` | `tsc --noEmit` for server and web (unused-code checks on) |
 
 ## Documentation

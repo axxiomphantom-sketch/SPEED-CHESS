@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS games (
   id             TEXT PRIMARY KEY,
   white_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
   black_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
+  owner_id       TEXT REFERENCES users(id) ON DELETE SET NULL, -- who created it: lets the creator review a local/computer game
   white_name     TEXT NOT NULL,
   black_name     TEXT NOT NULL,
   white_rating   REAL,

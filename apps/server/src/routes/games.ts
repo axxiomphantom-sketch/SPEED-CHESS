@@ -14,6 +14,34 @@ import { hub } from '../services/hub.js';
 export const gamesRouter = Router();
 export const playRouter = Router();
 
+/**
+ * Who may read a game.
+ * - Live games are watchable by anyone with the link, so a friend can spectate.
+ * - Finished online games are public too, which is what makes a leaderboard result verifiable.
+ * - A private game or a finished casual/local/computer game belongs to its players only.
+ */
+export function readable(
+  game: { is_private: number; status: string; mode: string; white_id: string | null; black_id: string | null; owner_id?: string | null },
+  userId?: string,
+) {
+  if (sideOf(game as never, userId) !== null) return true;
+  if (game.owner_id && game.owner_id === userId) return true;
+  if (game.is_private) return false;
+  if (game.status === 'active') return true;
+  return game.mode === 'online' || game.mode === 'tournament';
+}
+
+/** Premium/Pro (or staff) unlock the full per-move breakdown; computer games are always free. */
+export function hasAnalysisEntitlement(userId: string): boolean {
+  const row = db.prepare('SELECT plan, role FROM users WHERE id = ?').get(userId) as { plan: string; role: string } | undefined;
+  if (!row) return false;
+  return row.role === 'admin' || row.plan === 'premium' || row.plan === 'pro';
+}
+
+function readError(game: { is_private: number; status: string }) {
+  return game.is_private || game.status !== 'active' ? 'This game is visible to its players only' : 'Game not found';
+}
+
 const createSchema = z.object({
   mode: z.enum(['computer', 'local', 'friend']),
   category: z.enum(CATEGORIES).optional(),
@@ -47,7 +75,10 @@ playRouter.post('/games', requireAuth, (req: AuthedRequest, res) => {
     return res.status(201).json({ game: gamePayload(game) });
   }
   if (body.mode === 'local') {
-    const game = createGame({ whiteId: null, blackId: null, mode: 'local', seconds, increment, whiteName: 'White', blackName: 'Black' });
+    const game = createGame({
+      whiteId: null, blackId: null, ownerId: uid, mode: 'local', seconds, increment,
+      whiteName: 'White', blackName: 'Black',
+    });
     return res.status(201).json({ game: gamePayload(game) });
   }
   // Private online game: the creator waits for an opponent to join with the invite code.
@@ -82,11 +113,7 @@ gamesRouter.get('/:id', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
   const isPlayer = sideOf(game, req.user?.id) !== null;
-  if (game.is_private && !isPlayer) return res.status(403).json({ error: 'This game is private' });
-  // Finished games are private to the players; live games stay watchable through their link.
-  if (game.status !== 'active' && !isPlayer) {
-    return res.status(403).json({ error: 'Finished games are visible to the players only' });
-  }
+  if (!readable(game, req.user?.id)) return res.status(403).json({ error: readError(game) });
   res.json({ game: gamePayload(game), viewerSide: sideOf(game, req.user?.id) });
 });
 
@@ -154,7 +181,7 @@ gamesRouter.post('/:id/abort', requireAuth, (req: AuthedRequest, res) => {
 gamesRouter.get('/:id/pgn', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  if (game.is_private && sideOf(game, req.user?.id) === null) return res.status(403).json({ error: 'Private game' });
+  if (!readable(game, req.user?.id)) return res.status(403).json({ error: readError(game) });
   const pgn = game.pgn ?? buildLivePgn(game.id);
   res.type('application/x-chess-pgn').send(pgn);
 });
@@ -175,6 +202,7 @@ function buildLivePgn(gameId: string) {
 gamesRouter.get('/:id/analysis', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
+  if (!readable(game, req.user?.id)) return res.status(403).json({ error: readError(game) });
   const isPlayer = sideOf(game, req.user?.id) !== null;
   if (game.status === 'active') return res.status(409).json({ error: 'Analysis is available after the game finishes (fair play)' });
   const cached = db.prepare('SELECT payload FROM game_analysis WHERE game_id = ?').get(game.id) as { payload: string } | undefined;
@@ -185,6 +213,22 @@ gamesRouter.get('/:id/analysis', (req: AuthedRequest, res) => {
     analysis = analyseGame(pgn);
   } catch (err) {
     return res.status(422).json({ error: 'This game could not be analysed: ' + (err as Error).message });
+  }
+  // Full analysis is a Premium/Pro feature. Free players still get the honest headline numbers and
+  // evaluation graph; the per-move breakdown, best moves and written insights are withheld, and the
+  // response says so instead of pretending the data does not exist.
+  if (game.mode !== 'computer' && !hasAnalysisEntitlement(req.user!.id)) {
+    const { moves, ...headline } = analysis as Record<string, unknown> & { moves: unknown[] };
+    void moves;
+    return res.json({
+      analysis: {
+        ...headline, gameId: game.id, white: game.white_name, black: game.black_name,
+        viewerIsPlayer: isPlayer, moves: [], locked: true,
+        previewMoves: analysis.moves.slice(0, 2),
+      },
+      cached: false,
+      upgradeRequired: true,
+    });
   }
   const payload = { ...analysis, gameId: game.id, white: game.white_name, black: game.black_name, viewerIsPlayer: isPlayer };
   db.prepare('INSERT INTO game_analysis (game_id, payload) VALUES (?,?) ON CONFLICT(game_id) DO UPDATE SET payload = excluded.payload')
@@ -197,5 +241,6 @@ gamesRouter.get('/:id/analysis', (req: AuthedRequest, res) => {
 gamesRouter.get('/:id/moves', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
+  if (!readable(game, req.user?.id)) return res.status(403).json({ error: readError(game) });
   res.json({ moves: movesFor(game.id), clocks: { white: game.white_clock_ms, black: game.black_clock_ms } });
 });

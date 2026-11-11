@@ -12,6 +12,7 @@ import { hashPassword, verifyPassword, passwordIssues } from '../lib/password.js
 import { analyseGame, chooseComputerMove, identifyOpening, LEVELS } from '@speed-chess/engine';
 import { applyMove, createGame, finishGame, gameById, resign, offerDraw, movesFor } from '../services/games.js';
 import { matchmaker, windowFor } from '../services/matchmaking.js';
+import { readable, hasAnalysisEntitlement } from '../routes/games.js';
 import { generateSwissRound, startRoundGames, tournamentStandings } from '../services/tournaments.js';
 import { seedReferenceContent } from '../db/reference.js';
 
@@ -109,6 +110,18 @@ suite('Engine (search, opponent, analysis)', () => {
     assert(analysis.accuracyWhite >= 0 && analysis.accuracyWhite <= 100, 'accuracy in range');
     assert(analysis.moves[0].classification === 'book' || analysis.moves[0].classification === 'good' || analysis.moves[0].classification === 'inaccuracy', 'first move is classified');
     assert(analysis.moves[3].san === 'Qh4#', 'mate recorded');
+  });
+  test('flags a move that allows mate in one as a blunder', () => {
+    // 2. g4?? allows Qh4#. A static evaluation sees level material, so this only works if the
+    // analyser searches the resulting position.
+    const analysis = analyseGame(`[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1`);
+    const g4 = analysis.moves.find(m => m.san === 'g4')!;
+    assertEqual(g4.classification, 'blunder');
+    assert(g4.lossCp > 500, 'the blunder loses at least a rook of evaluation');
+    assert(analysis.counts.blunder >= 1, 'a blunder is counted');
+    assert(analysis.summary.includes('blunder'), 'the summary names the turning point');
+    assert(analysis.accuracyWhite < 60, `White should not look accurate after allowing mate (got ${analysis.accuracyWhite})`);
+    assert(analysis.accuracyBlack > 90, 'Black converts cleanly');
   });
   test('classifies a blunder in a real game', () => {
     const pgn = `[Result "1-0"]
@@ -327,6 +340,42 @@ suite('Matchmaking', () => {
     const other = matchmaker.enqueue({ userId: b, username: 'tester_mmb', rating: 1500, category: 'bullet', seconds: 60, increment: 0, rated: true });
     assertEqual(other.matched, undefined);
     matchmaker.cancel(a); matchmaker.cancel(b);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+suite('Game visibility', () => {
+  const me = newUser('vis_me');
+  const them = newUser('vis_them');
+  const base = { is_private: 0, status: 'active', mode: 'online', white_id: me, black_id: them };
+  test('live games are watchable, finished casual games are not', () => {
+    assert(readable(base, undefined), 'anyone may watch a live online game');
+    assert(readable(base, me), 'a player may read their own live game');
+    assert(!readable({ ...base, status: 'finished', mode: 'local' }, undefined), 'anonymous cannot read our finished local game');
+    assert(readable({ ...base, status: 'finished', mode: 'local' }, me), 'a player may read their own finished local game');
+  });
+  test('finished online games stay public for verifiable results', () => {
+    assert(readable({ ...base, status: 'finished' }, undefined), 'finished online game is public');
+  });
+  test('full move-by-move analysis is a paid feature', () => {
+    const free = newUser('vis_free');
+    const premium = newUser('vis_prem');
+    const adminUser = newUser('vis_admin');
+    db.prepare("UPDATE users SET plan = 'free' WHERE id = ?").run(free);
+    db.prepare("UPDATE users SET plan = 'premium' WHERE id = ?").run(premium);
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(adminUser);
+    assertEqual(hasAnalysisEntitlement(free), false, 'free accounts get the headline only');
+    assertEqual(hasAnalysisEntitlement(premium), true, 'premium accounts get the breakdown');
+    assertEqual(hasAnalysisEntitlement(adminUser), true, 'staff always get the breakdown');
+  });
+  test('private games are only ever readable by their players', () => {
+    const outsider = newUser('vis_out');
+    const priv = { ...base, is_private: 1 };
+    assert(!readable(priv, undefined), 'anonymous cannot read a private game');
+    assert(!readable(priv, outsider), 'a signed-in stranger cannot read a private game');
+    assert(!readable({ ...priv, status: 'finished' }, outsider), 'a stranger cannot read a private finished game');
+    assert(readable(priv, me), 'a player can read their private game');
+    assert(readable(priv, them), 'both players can read their private game');
   });
 });
 

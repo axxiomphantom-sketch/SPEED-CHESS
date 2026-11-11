@@ -105,18 +105,34 @@ export function evaluate(chess: Chess): number {
   return Math.round(score * perspective) + 8;
 }
 
-function moveOrderScore(chess: Chess, move: Move): number {
+/**
+ * Chess.js will not generate a move that captures the enemy king; it throws for a position where
+ * the side to move is already mated. This helper answers "does the opponent have mate in one?"
+ * without trusting the search to see it.
+ */
+function hasMateInOne(chess: Chess): boolean {
+  for (const move of chess.moves({ verbose: true }) as unknown as Move[]) {
+    try {
+      chess.move(move);
+    } catch {
+      continue;
+    }
+    const mated = chess.isCheckmate();
+    chess.undo();
+    if (mated) return true;
+  }
+  return false;
+}
+
+function moveOrderScore(move: Move): number {
   let s = 0;
   if (move.captured) s += 10 * PIECE_VALUE[move.captured] - PIECE_VALUE[move.piece];
   if (move.promotion) s += 800;
+  // chess.js puts '#' and '+' in the SAN, so ordering needs no extra board probe. Cloning the
+  // position here for every comparison made the search roughly ten times slower.
   if (move.san.includes('#')) s += 100000;
   if (move.san.includes('+')) s += 50;
   if (move.san === 'O-O' || move.san === 'O-O-O') s += 60;
-  try {
-    const probe = new Chess(chess.fen());
-    probe.move(move.san);
-    if (probe.isCheckmate()) s += 100000;
-  } catch { /* ignore */ }
   return s;
 }
 
@@ -134,7 +150,7 @@ export function search(fen: string, depth: number, nodeBudget = 200000): SearchR
     if (stand > alpha) alpha = stand;
     if (plies <= 0) return alpha;
     const caps = chess.moves({ verbose: true }).filter(m => m.captured || m.promotion);
-    caps.sort((a, b) => moveOrderScore(chess, b) - moveOrderScore(chess, a));
+    caps.sort((a, b) => moveOrderScore(b) - moveOrderScore(a));
     for (const m of caps) {
       nodes++;
       chess.move(m);
@@ -148,11 +164,23 @@ export function search(fen: string, depth: number, nodeBudget = 200000): SearchR
 
   const negamax = (d: number, alpha: number, beta: number, ply: number): number => {
     nodes++;
+    // Chess.js reports a king capture as illegal, so a checkmate must be detected *before* moving.
+    // Without this guard the search happily walks into mate and scores it as a normal position.
     if (chess.isCheckmate()) return -99000 + ply;
     if (chess.isDraw()) return 0;
-    if (d === 0 || nodes > nodeBudget || Date.now() > deadline) return quiesce(alpha, beta, 4);
+    if (d === 0 || nodes > nodeBudget || Date.now() > deadline) {
+      // With no depth left, mate-in-one is invisible to a static evaluation: a queen one square
+      // from the enemy king scores like any other queen. Detect it explicitly.
+      // Only the side in check can be mated right now, so the expensive mate scan runs rarely.
+      if (chess.inCheck()) {
+        const inCheckPlayed = quiesce(alpha, beta, 4);
+        if (hasMateInOne(chess)) return Math.max(inCheckPlayed, 98000 - ply);
+        return inCheckPlayed;
+      }
+      return quiesce(alpha, beta, 4);
+    }
     const moves = chess.moves({ verbose: true });
-    moves.sort((a, b) => moveOrderScore(chess, b) - moveOrderScore(chess, a));
+    moves.sort((a, b) => moveOrderScore(b) - moveOrderScore(a));
     let best = -Infinity;
     for (const m of moves) {
       chess.move(m);
@@ -169,7 +197,7 @@ export function search(fen: string, depth: number, nodeBudget = 200000): SearchR
   let bestScore = -Infinity;
   const root = chess.moves({ verbose: true });
   if (root.length === 0) return { move: null, score: chess.isCheckmate() ? -99000 : 0, depth: 0, nodes };
-  root.sort((a, b) => moveOrderScore(chess, b) - moveOrderScore(chess, a));
+  root.sort((a, b) => moveOrderScore(b) - moveOrderScore(a));
   for (const m of root) {
     chess.move(m);
     const score = -negamax(depth - 1, -Infinity, -bestScore === Infinity ? Infinity : -bestScore, 1);

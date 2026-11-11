@@ -29,9 +29,14 @@ defaults for minors described in `docs/API.md` and the Legal page.
 
 | Table | Purpose | Notes |
 | --- | --- | --- |
-| `games` | One row per game, including computer, local and imported games. | `mode` ∈ online/computer/local/tournament, `status` ∈ pending/active/finished/aborted, `result` ∈ white/black/draw, `rated`, `category`, `initial_seconds`, `increment`, `fen`, `pgn`, `turn`, `white_clock_ms`, `black_clock_ms`, `invite_code`, `accuracy_white/black` |
+| `games` | One row per game, including computer, local and imported games. | `mode` ∈ online/computer/local/tournament, `status` ∈ pending/active/finished/aborted, `result` ∈ white/black/draw, `rated`, `category`, `initial_seconds`, `increment`, `fen`, `pgn`, `turn`, `white_clock_ms`, `black_clock_ms`, `invite_code`, `owner_id`, `accuracy_white/black` |
 | `moves` | Every ply, with the resulting FEN and both clocks. | PK `(game_id, ply)`, `san`, `uci`, `fen_after`, `is_check`, `is_capture` |
 | `game_analysis` | Cache of the engine review, one JSON payload per game. | PK `game_id` |
+
+`games.owner_id` records who created the game. It is what lets a player review a local hot-seat game
+or a PGN import afterwards — those games have no opponent user, so without it their own creator could
+not read `/games/:id/pgn` or `/games/:id/analysis` back. `migrate()` adds the column to older
+databases with `ALTER TABLE` when it is missing.
 
 `games.black_id` is `NULL` for computer games — the engine is not a user. Local games store the
 two player names in `white_name`/`black_name` and keep `rated = 0`. Imported PGNs are stored with
