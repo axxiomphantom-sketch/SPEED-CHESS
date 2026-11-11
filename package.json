@@ -1,0 +1,27 @@
+{
+  "name": "speed-chess",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SPEED CHESS — Play. Learn. Compete. Evolve. A complete chess platform.",
+  "workspaces": [
+    "apps/server",
+    "apps/web",
+    "packages/engine"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm -w @speed-chess/server run dev",
+    "dev:web": "npm -w @speed-chess/web run dev",
+    "build": "npm -w @speed-chess/web run build",
+    "start": "npm -w @speed-chess/server run start",
+    "seed": "npm -w @speed-chess/server run seed",
+    "test": "npm -w @speed-chess/server run test",
+    "typecheck": "npm -w @speed-chess/server run typecheck && npm -w @speed-chess/web run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
