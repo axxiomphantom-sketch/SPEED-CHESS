@@ -88,6 +88,27 @@ to the address players actually open, and add every other origin (including the 
 immediately and the verification screen is skipped; the server still refuses unverified sessions on
 `/auth/supabase/sync`.
 
+### 2.4b Google sign-in (optional)
+
+The app shows a **Continue with Google** button on `/login` and `/register` whenever Supabase is
+configured, and handles the return at `/auth/callback`.
+
+1. **Supabase → Authentication → Providers → Google**: paste your Google OAuth **Client ID** and
+   **Client Secret** (from Google Cloud Console → APIs & Services → Credentials).
+2. In Google Cloud, set the authorised redirect URI to **your Supabase callback**, not the app:
+   `https://<project-ref>.supabase.co/auth/v1/callback`
+3. In **Supabase → Authentication → URL Configuration → Redirect URLs**, add every origin the app is
+   served from, with the `/auth/callback` path:
+
+   ```
+   http://localhost:5173/auth/callback
+   https://<your-preview-origin>/auth/callback
+   https://<your-production-domain>/auth/callback
+   ```
+
+A redirect URL missing from that list is the single most common cause of Google sign-in returning
+to a blank page — Supabase refuses to redirect to an unlisted origin.
+
 ### 2.5 Restart
 
 ```bash
@@ -182,7 +203,8 @@ numeric suffix on collision.
 | Screen | Behaviour |
 | --- | --- |
 | `/register` | Username, email, password, **confirm password**, country, age + terms. Validates locally, then `supabase.auth.signUp` with the username in `user_metadata`. Shows a "check your email" screen; no access until verified. |
-| `/login` | `signInWithPassword` → `/api/auth/supabase/sync` → dashboard. Friendly errors for wrong password, unverified address, rate limiting and duplicates. |
+| `/login` | **Continue with Google** (OAuth, PKCE) *or* `signInWithPassword` → `/api/auth/supabase/sync` → dashboard. Friendly errors for wrong password, unverified address, rate limiting and duplicates. |
+| `/auth/callback` | Exchanges the OAuth `?code=` for a session, provisions the local account, then redirects to the dashboard. |
 | `/verify-email` | Consumes `?token_hash=…`, exchanges it, provisions the local account, then offers the dashboard. Can resend the confirmation email. |
 | `/reset-password` | Consumes the recovery `token_hash`, validates the new password, calls `updateUser`. Offers to send a fresh link if the old one expired. |
 | Forgot password | "Send reset link" on `/login`. Always reports success, so accounts cannot be enumerated. |

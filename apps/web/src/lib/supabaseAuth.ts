@@ -130,6 +130,61 @@ export async function signInWithSupabase(email: string, password: string): Promi
   return syncLocalAccount();
 }
 
+/**
+ * Starts the Google OAuth flow.
+ *
+ * `redirectTo` must be listed in Supabase → Authentication → URL Configuration → Redirect URLs.
+ * With PKCE (the default for `@supabase/ssr`) the flow returns to this app with `?code=…`, which
+ * `completeOAuthFromUrl` exchanges for a session.
+ */
+export async function signInWithGoogle(): Promise<AuthResult> {
+  if (!isSupabaseConfigured) {
+    return { ok: false, message: new SupabaseNotConfiguredError().message };
+  }
+  const supabase = requireSupabaseBrowserClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: appUrl('/auth/callback'),
+      // Ask Google for the basics only; the username comes from metadata on first sign-in.
+      queryParams: { prompt: 'select_account' },
+    },
+  });
+  // On success the browser is already navigating to Google, so a success value never arrives.
+  if (error) return { ok: false, message: friendly(error) };
+  return { ok: true };
+}
+
+/**
+ * Finishes an OAuth redirect: exchanges the `?code=` for a session, then provisions the local
+ * chess account. Returns `{ ok: true }` when the player is fully signed in.
+ */
+export async function completeOAuthFromUrl(): Promise<AuthResult & { notStarted?: boolean }> {
+  if (!isSupabaseConfigured) {
+    return { ok: false, message: new SupabaseNotConfiguredError().message };
+  }
+  const supabase = requireSupabaseBrowserClient();
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('code');
+  const errorDescription = url.searchParams.get('error_description') ?? url.searchParams.get('error');
+
+  if (errorDescription) {
+    return { ok: false, message: `Google sign-in was cancelled or refused (${errorDescription}).` };
+  }
+  if (!code) {
+    // Also handles the implicit flow, where the SDK has already parsed the URL fragment.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return { ok: false, message: 'This sign-in link is missing its code.', notStarted: true };
+  } else {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) return { ok: false, message: friendly(error) };
+  }
+
+  const synced = await syncLocalAccount();
+  if (!synced.ok) return synced;
+  return { ok: true };
+}
+
 /** Provisions/refreshes the local account and session cookie. Safe to call repeatedly. */
 export async function syncLocalAccount(): Promise<AuthResult> {
   try {

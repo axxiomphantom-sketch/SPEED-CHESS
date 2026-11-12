@@ -191,6 +191,7 @@ tbody tr:hover { background: #1a1a22; }
 .skeleton { background: linear-gradient(90deg, #1c1c24 25%, #26262f 50%, #1c1c24 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .spinner { width: 18px; height: 18px; border: 2px solid rgba(255, 255, 255, .25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+.spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- Modal ---------- */

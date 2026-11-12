@@ -4,6 +4,7 @@ import { ApiError, api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isSupabaseConfigured, signUpWithSupabase } from '../lib/supabaseAuth';
 import { AuthShell } from '../components/AuthShell';
+import { GoogleButton } from '../components/GoogleButton';
 import { Alert, Button, Field } from '../components/ui';
 
 const COUNTRIES = ['NG', 'GH', 'KE', 'ZA', 'EG', 'GB', 'US', 'CA', 'DE', 'FR', 'ES', 'IT', 'NL', 'PL', 'UA', 'RU', 'IN', 'BR', 'AR', 'MX', 'AU', 'JP', 'CN', 'PH', 'TR', 'AE', 'SA', 'PK', 'BD', 'ID', 'MY', 'SG', 'SE', 'NO', 'DK', 'FI', 'IE', 'PT', 'GR', 'CZ'];
@@ -112,6 +113,16 @@ export function Register() {
       subtitle="Free forever for chess, lessons, puzzles, clubs and public tournaments."
       footer={<>Already registered? <Link to="/login" style={{ fontWeight: 600 }}>Sign in</Link></>}
     >
+      {isSupabaseConfigured && (
+        <>
+          <GoogleButton label="Sign up with Google" onError={setError} />
+          <div className="row" style={{ gap: 12, margin: '16px 0', alignItems: 'center' }} aria-hidden="true">
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span className="tiny muted">or register with email</span>
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+        </>
+      )}
       <form onSubmit={submit} noValidate>
         {error && <div className="form-error" role="alert">{error}</div>}
         <Field label="Username" htmlFor="username" hint="3–24 characters: letters, numbers and underscores.">

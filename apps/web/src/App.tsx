@@ -39,6 +39,7 @@ const Help = lazy(() => import('./pages/Help').then(m => ({ default: m.Help })))
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const Legal = lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
+const AuthCallback = lazy(() => import('./pages/AuthCallback').then(m => ({ default: m.AuthCallback })));
 const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 
 function PageFallback() {
@@ -60,6 +61,7 @@ export function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/legal/:doc" element={<Legal />} />
 

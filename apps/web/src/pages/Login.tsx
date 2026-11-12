@@ -6,6 +6,7 @@ import {
   isSupabaseConfigured, sendPasswordReset, signInWithSupabase, signOutEverywhere,
 } from '../lib/supabaseAuth';
 import { AuthShell } from '../components/AuthShell';
+import { GoogleButton } from '../components/GoogleButton';
 import { Alert, Button, Field } from '../components/ui';
 
 export function Login() {
@@ -86,6 +87,16 @@ export function Login() {
       subtitle="Sign in to continue your games, lessons and training."
       footer={<>New to SPEED CHESS? <Link to="/register" style={{ fontWeight: 600 }}>Create a free account</Link></>}
     >
+      {isSupabaseConfigured && (
+        <>
+          <GoogleButton onError={setError} />
+          <div className="row" style={{ gap: 12, margin: '16px 0', alignItems: 'center' }} aria-hidden="true">
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span className="tiny muted">or use your email</span>
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+        </>
+      )}
       <form onSubmit={submit} noValidate>
         {error && <div className="form-error" role="alert">{error}</div>}
         {info && <div className="form-success" role="status" style={{ wordBreak: 'break-word' }}>{info}</div>}
