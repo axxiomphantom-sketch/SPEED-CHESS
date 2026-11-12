@@ -16,6 +16,7 @@ import { readable, hasAnalysisEntitlement } from '../routes/games.js';
 import { generateSwissRound, startRoundGames, tournamentStandings } from '../services/tournaments.js';
 import { seedReferenceContent } from '../db/reference.js';
 import { registerSupabaseBridgeSuite, registerRuntimeConfigSuite } from './supabaseBridge.js';
+import { registerGameChatSuite } from './gameChat.js';
 
 migrate();
 seedReferenceContent();
@@ -35,6 +36,7 @@ async function main() {
 // Needs the schema to exist, so it is registered here rather than at import time.
 registerSupabaseBridgeSuite();
 registerRuntimeConfigSuite();
+registerGameChatSuite();
 suite('Chess rules (chess.js integration)', () => {
   test('detects checkmate — back-rank mate', () => {
     const chess = new Chess('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');

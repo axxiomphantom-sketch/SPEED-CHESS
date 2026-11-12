@@ -10,6 +10,7 @@ import {
 } from '../services/games.js';
 import { getUserRating } from '../lib/service.js';
 import { hub } from '../services/hub.js';
+import { messagesFor, postMessage, MAX_MESSAGE_LENGTH } from '../services/gameChat.js';
 
 export const gamesRouter = Router();
 export const playRouter = Router();
@@ -107,6 +108,31 @@ playRouter.post('/games/join', requireAuth, (req: AuthedRequest, res) => {
   hub.toGame(game.id, 'game:joined', { game: gamePayload(updated) });
   if (updated.white_id) hub.toUser(updated.white_id, 'game:joined', { game: gamePayload(updated) });
   res.json({ game: gamePayload(updated) });
+});
+
+/**
+ * In-game chat history. Players and spectators may read; only players may post (below).
+ * A finished game still returns its history so it can be reviewed, but posting is closed.
+ */
+gamesRouter.get('/:id/messages', requireAuth, (req: AuthedRequest, res) => {
+  const game = gameById(req.params.id);
+  if (!game) return res.status(404).json({ error: 'That game does not exist.' });
+  res.set('cache-control', 'no-store');
+  res.json({ messages: messagesFor(game.id) });
+});
+
+/** Posts a chat message and pushes it to everyone watching the game. */
+gamesRouter.post('/:id/messages', requireAuth, (req: AuthedRequest, res) => {
+  const body = typeof req.body?.body === 'string' ? req.body.body : '';
+  if (body.length > MAX_MESSAGE_LENGTH * 4) {
+    // Cheap rejection before touching normalisation, for oversized payloads.
+    return res.status(413).json({ error: 'That message is too long.' });
+  }
+  const result = postMessage(req.params.id, req.user!.id, body);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  // Spectators are subscribed to the same game room, so one broadcast reaches players and watchers.
+  hub.toGame(req.params.id, 'game:message', { gameId: req.params.id, message: result.message });
+  res.status(201).json({ message: result.message });
 });
 
 gamesRouter.get('/:id', (req: AuthedRequest, res) => {
