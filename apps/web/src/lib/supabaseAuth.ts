@@ -55,6 +55,13 @@ function friendly(error: { message?: string; status?: number; code?: string } | 
   if (message.includes('signups not allowed')) {
     return 'New registrations are currently disabled on this project.';
   }
+  if (
+    message.includes('failed to fetch') || message.includes('networkerror') ||
+    message.includes('network request failed') || message.includes('load failed') ||
+    message.includes('fetch failed') || (error?.status ?? 0) === 0
+  ) {
+    return 'Could not reach the authentication service. Check your internet connection — and if you are running this inside a restricted sandbox, Supabase may be blocked.';
+  }
   return error?.message ? `Sign-in failed: ${error.message}` : 'Something went wrong. Please try again.';
 }
 

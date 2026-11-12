@@ -88,7 +88,15 @@ export async function probeSupabase(): Promise<{ ok: boolean; reason?: string }>
     if (!res.ok) return { ok: false, reason: `HTTP ${res.status} from ${config.supabaseUrl}` };
     return { ok: true };
   } catch (err) {
-    return { ok: false, reason: (err as Error).name === 'AbortError' ? 'timed out' : (err as Error).message };
+    const e = err as Error & { cause?: { code?: string } };
+    // Node reports most transport failures as a bare "fetch failed"; the useful code lives in
+    // `cause`. Without it, ECONNRESET (blocked egress) is indistinguishable from a typo'd URL.
+    const code = e.cause?.code;
+    const detail = code ? `${e.message} (${code})` : e.message;
+    return {
+      ok: false,
+      reason: e.name === 'AbortError' ? 'timed out after 5s' : detail,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -118,6 +126,14 @@ export async function readSupabaseUser(req: Request, res: Response): Promise<Ver
   const supabase = createSupabaseServerClient(req, res);
   if (!supabase) return null;
 
+  // `getSession`/`getClaims`/`getUser` all reach the network when a token needs refreshing or the
+  // project uses symmetric keys. Without a ceiling, a blackholed route would hold the HTTP request
+  // open until the socket gives up — so the whole verification is time-boxed. On timeout we treat
+  // the caller as anonymous: protected routes then answer 401 rather than hanging.
+  return withTimeout(verifySession(supabase), 6000, null);
+}
+
+async function verifySession(supabase: SupabaseClient): Promise<VerifiedSupabaseUser | null> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
 
@@ -146,6 +162,22 @@ export async function readSupabaseUser(req: Request, res: Response): Promise<Ver
     username: pickUsername(user.user_metadata),
     user,
   };
+}
+
+/**
+ * Resolves `promise`, or `fallback` if it takes longer than `ms`. Used to keep a slow or
+ * unreachable Supabase from turning into an unbounded request wait.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>(resolve => { timer = setTimeout(() => resolve(fallback), ms); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Supabase sets `email_confirmed_at` (and historically `confirmed_at`) once the address is proven. */
