@@ -139,6 +139,45 @@ server {
 
 Set `APP_URL=https://chess.example.com`; cookies are `secure` when `NODE_ENV=production`.
 
+## 6b. Clearing registered accounts
+
+To remove every registered player — for example after testing, before launch, or to start with a
+clean database — use the purge script rather than editing the database by hand:
+
+```bash
+# Always start with a dry run: lists the accounts and related rows, deletes nothing.
+npm -w @speed-chess/server run purge:users
+
+# Keep the seeded demo accounts, remove only accounts people registered themselves.
+npm -w @speed-chess/server run purge:users -- --yes --keep-seed
+
+# Remove every account.
+npm -w @speed-chess/server run purge:users -- --yes
+```
+
+Point it at a specific database with `DATABASE_FILE` (or `DATA_DIR`):
+
+```bash
+DATABASE_FILE=./data/speed-chess.db npm -w @speed-chess/server run purge:users -- --yes
+```
+
+### Why a `DELETE FROM users` is not enough
+
+| Problem | What the script does |
+| --- | --- |
+| `audit_logs` has **no foreign key** to `users` and stores the username in a JSON `meta` column | Clears `audit_logs` wholesale |
+| `reports` can contain player names in free-text reasons | Clears `reports` |
+| `games` use `ON DELETE SET NULL`, so a deleted player's games survive as ownerless records | Deletes `games` |
+| SQLite leaves deleted bytes in free pages — emails stay readable with `grep` | `VACUUM`, then **verifies** the raw file no longer contains any of the addresses |
+| A partial failure would leave a half-purged database | Runs inside a single transaction |
+
+Reference content (courses, lessons, puzzles, openings) is untouched, so the app still works and new
+players get the full academy.
+
+The script also prints a note about Supabase: accounts created through Supabase Auth live in that
+service, not in this database. Remove them in **Supabase → Authentication → Users**, or new sign-ups
+will still collide with the old addresses.
+
 ## 7. Backups
 
 The database is a single file in WAL mode. Take a consistent snapshot with SQLite's own backup:

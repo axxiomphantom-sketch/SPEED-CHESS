@@ -10,7 +10,8 @@
     "start": "tsx src/index.ts",
     "seed": "tsx src/db/seed.ts",
     "test": "DATABASE_FILE=./data/test.db tsx src/tests/run.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "purge:users": "tsx src/db/purge-users.ts"
   },
   "dependencies": {
     "@speed-chess/engine": "*",
