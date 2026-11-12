@@ -1,4 +1,7 @@
-import { requireSupabaseBrowserClient, isSupabaseConfigured, SupabaseNotConfiguredError } from '../utils/supabase/client';
+import {
+  requireSupabaseBrowserClient, isSupabaseConfigured, SupabaseNotConfiguredError,
+  ensureAuthConfig, isAuthConfigLoaded,
+} from '../utils/supabase/client';
 import { api, ApiError } from './api';
 
 /**
@@ -9,7 +12,7 @@ import { api, ApiError } from './api';
  * credentials" is friendly, "AuthApiError: Invalid login credentials at _request" is not.
  */
 
-export { isSupabaseConfigured, SupabaseNotConfiguredError };
+export { isSupabaseConfigured, isAuthConfigLoaded, ensureAuthConfig, SupabaseNotConfiguredError };
 
 export type AuthResult =
   | { ok: true; message?: string; needsVerification?: boolean }
@@ -78,7 +81,9 @@ export async function signUpWithSupabase(input: {
   password: string;
   country?: string;
 }): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -117,7 +122,9 @@ export async function signUpWithSupabase(input: {
  * verifying the Supabase token server-side with `getClaims()`.
  */
 export async function signInWithSupabase(email: string, password: string): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -145,7 +152,9 @@ export async function signInWithSupabase(email: string, password: string): Promi
  * `completeOAuthFromUrl` exchanges for a session.
  */
 export async function signInWithGoogle(): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -167,7 +176,9 @@ export async function signInWithGoogle(): Promise<AuthResult> {
  * chess account. Returns `{ ok: true }` when the player is fully signed in.
  */
 export async function completeOAuthFromUrl(): Promise<AuthResult & { notStarted?: boolean }> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -211,7 +222,9 @@ export async function syncLocalAccount(): Promise<AuthResult> {
 
 /** Sends the password-reset email. Always reports success so accounts cannot be enumerated. */
 export async function sendPasswordReset(email: string): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -235,7 +248,9 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
 
 /** Applies a new password using the recovery session created by the emailed link. */
 export async function updatePassword(newPassword: string): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -246,7 +261,9 @@ export async function updatePassword(newPassword: string): Promise<AuthResult> {
 
 /** Resends the confirmation email. */
 export async function resendVerification(email: string): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -264,7 +281,9 @@ export async function resendVerification(email: string): Promise<AuthResult> {
  * `type` must match the template that produced the link (signup, recovery, email_change, invite).
  */
 export async function verifyEmailToken(tokenHash: string, type: 'signup' | 'recovery' | 'email_change' | 'invite' | 'magiclink' | 'email' = 'signup'): Promise<AuthResult> {
-  if (!isSupabaseConfigured) {
+  // Load the runtime config first: on a cold start the flag is still false, and answering
+  // "not configured" before asking the server would be wrong.
+  if (!(await ensureAuthConfig())) {
     return { ok: false, message: new SupabaseNotConfiguredError().message };
   }
   const supabase = requireSupabaseBrowserClient();
@@ -276,6 +295,8 @@ export async function verifyEmailToken(tokenHash: string, type: 'signup' | 'reco
 /** Signs out of Supabase and clears the SPEED CHESS session. Safe to call when only one exists. */
 export async function signOutEverywhere(): Promise<void> {
   try {
+    // Signing out must work even when the config has not loaded: if it is absent there is no
+    // Supabase session to clear, and the local logout below still runs.
     const supabase = isSupabaseConfigured ? requireSupabaseBrowserClient() : null;
     await supabase?.auth.signOut();
   } catch {
@@ -286,7 +307,7 @@ export async function signOutEverywhere(): Promise<void> {
 
 /** Current Supabase session details, used by the verify-email screen to show the address. */
 export async function currentSupabaseUser() {
-  if (!isSupabaseConfigured) return null;
+  if (!(await ensureAuthConfig())) return null;
   const supabase = requireSupabaseBrowserClient();
   const { data } = await supabase.auth.getUser();
   return data.user ?? null;

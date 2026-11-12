@@ -255,9 +255,24 @@ export function PublicLayout() {
  * a normal sign-in prompt that returns the user to the page they were on.
  */
 export function AuthOnly() {
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
   const location = useLocation();
-  if (loading) {
+  const [rechecked, setRechecked] = useState(false);
+
+  /**
+   * The cached context can be stale for one render after a fresh sign-in, which showed a
+   * signed-in player the sign-in prompt on /onboarding — the "Authentication required" dead end
+   * this guard exists to prevent. So when the context says signed-out, ask the API once directly
+   * before showing the prompt; a real session resolves immediately and the player continues.
+   */
+  useEffect(() => {
+    if (loading || user || rechecked) return;
+    let cancelled = false;
+    void refresh().finally(() => { if (!cancelled) setRechecked(true); });
+    return () => { cancelled = true; };
+  }, [loading, user, rechecked, refresh]);
+
+  if (loading || (!user && !rechecked)) {
     return <div className="center" style={{ minHeight: '60vh' }}><span className="spinner" /></div>;
   }
   if (!user) return <SignInPrompt from={location.pathname + location.search} />;

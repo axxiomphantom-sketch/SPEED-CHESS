@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
-  isSupabaseConfigured, sendPasswordReset, signInWithSupabase, signOutEverywhere,
+  isSupabaseConfigured, ensureAuthConfig, sendPasswordReset, signInWithSupabase, signOutEverywhere,
 } from '../lib/supabaseAuth';
 import { AuthShell } from '../components/AuthShell';
 import { GoogleButton } from '../components/GoogleButton';
@@ -32,6 +32,9 @@ export function Login() {
     if (!email.trim() || !password) { setError('Enter your email address and password.'); return; }
     setLoading(true);
     try {
+      // Runtime-loaded now, so resolve it before choosing a path.
+      await ensureAuthConfig();
+
       if (isSupabaseConfigured) {
         // Supabase verifies the password; the API then trades that verified session for the
         // SPEED CHESS cookie after checking the token server-side.
@@ -65,6 +68,8 @@ export function Login() {
     if (!email.trim()) { setError('Enter your email address first.'); return; }
     setBusyRecovery(true);
     try {
+      await ensureAuthConfig();
+
       if (isSupabaseConfigured) {
         const result = await sendPasswordReset(email);
         if (result.ok) { setInfo(result.message ?? 'Check your inbox for the reset link.'); setRecovering(false); }

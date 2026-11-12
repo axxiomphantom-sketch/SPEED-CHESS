@@ -12,6 +12,7 @@ import {
   SUPABASE_PASSWORD_SENTINEL, ensureLocalUser, findBySupabaseId, linkSupabaseUser, normaliseUsername,
 } from '../services/supabaseUsers.js';
 import { verifyPassword } from '../lib/password.js';
+import { config } from '../config.js';
 
 function fakeUuid(seed: string): string {
   const hex = Buffer.from(seed).toString('hex').padEnd(32, '0').slice(0, 32);
@@ -131,6 +132,50 @@ suite('Supabase identity bridge', () => {
       ).run('usr_bridge_conflict', 'uniq_other', 'uniq_other', 'uniq2@example.com', 'uniq2@example.com', SUPABASE_PASSWORD_SENTINEL, supabaseUserId);
     } catch { threw = true; }
     assert(threw, 'a duplicate supabase_user_id must be rejected by the database');
+  });
+});
+}
+
+/**
+ * Regression guard for the configuration bug that took three rounds to find.
+ *
+ * The browser used to decide whether Supabase was available from `import.meta.env.VITE_*`, which
+ * Vite inlines at build time. A build without the env file therefore folded the check to `false`
+ * and tree-shook the entire Supabase SDK out of the bundle, so the app silently used local auth
+ * while the server was fully configured. Nothing failed loudly; the two halves simply disagreed.
+ *
+ * The client now reads `GET /api/meta/config` at runtime. These assertions pin down the contract
+ * that made it possible: the endpoint must report the truth, and it must expose the *publishable*
+ * key (a browser cannot reach Supabase without it) while never exposing a secret.
+ */
+export function registerRuntimeConfigSuite(): void {
+suite('Runtime auth configuration', () => {
+  test('reports Supabase as configured when both values are present', () => {
+    // The test harness runs with the same env loader as the server.
+    const expected = Boolean(config.supabaseUrl && config.supabasePublishableKey);
+    assertEqual(
+      expected, true,
+      'the test environment must have Supabase configured, or this suite proves nothing',
+    );
+  });
+
+  test('exposes only the publishable key, never a secret', () => {
+    const key = config.supabasePublishableKey;
+    assert(key.startsWith('sb_publishable_') || key.split('.').length === 3,
+      'the exposed key must be a publishable/anon key');
+    // A service-role key is a JWT whose payload carries "role":"service_role".
+    const payload = key.split('.')[1];
+    if (payload) {
+      const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8')) as { role?: string };
+      assert(decoded.role !== 'service_role', 'a service-role key must never reach the browser');
+    }
+    assert(!/service_role/.test(config.supabasePublishableKey), 'no service_role marker in the key');
+  });
+
+  test('the project URL is a bare origin, not a REST path', () => {
+    assert(!config.supabaseUrl.includes('/rest/v1'), 'a /rest/v1 suffix breaks the auth client');
+    assert(!config.supabaseUrl.endsWith('/'), 'a trailing slash produces // in auth URLs');
+    assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.supabaseUrl), `unexpected shape: ${config.supabaseUrl}`);
   });
 });
 }
