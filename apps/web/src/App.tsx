@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { AppLayout, ProtectedLayout } from './components/Layout';
+import { AppLayout, AuthOnly, ProtectedLayout } from './components/Layout';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -104,7 +104,10 @@ export function App() {
           </Route>
         </Route>
 
-        <Route path="/onboarding" element={<Onboarding />} />
+        {/* Full-screen wizard: needs a session (it saves to /me/onboarding) but not the app shell. */}
+        <Route element={<AuthOnly />}>
+          <Route path="/onboarding" element={<Onboarding />} />
+        </Route>
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>

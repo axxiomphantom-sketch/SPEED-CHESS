@@ -1,9 +1,17 @@
 node_modules/
+# Runtime data. The server resolves a relative DATA_DIR against its own cwd, so these can appear
+# under the repo root or under apps/server — never commit either.
 data/*.db
 data/*.db-wal
 data/*.db-shm
 data/.jwt-secret
+**/data/*.db
+**/data/*.db-wal
+**/data/*.db-shm
+**/data/*.db-journal
+**/.jwt-secret
 data/uploads/*
+**/data/uploads/*
 !data/uploads/.gitkeep
 apps/web/dist/
 *.tsbuildinfo

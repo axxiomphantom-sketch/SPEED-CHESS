@@ -245,25 +245,46 @@ export function PublicLayout() {
   return <Outlet />;
 }
 
+/**
+ * Guards a route that requires a signed-in user but should not render the app shell.
+ *
+ * `/onboarding` is the motivation: it is a full-screen wizard, yet it calls PATCH /me/onboarding,
+ * which requires auth. Without this guard a signed-out visitor sees a complete, interactive
+ * wizard, fills it in, presses "Finish setup", and only then gets a bare "Authentication required"
+ * error — the failure the wizard cannot explain or recover from. Checking up front turns that into
+ * a normal sign-in prompt that returns the user to the page they were on.
+ */
+export function AuthOnly() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) {
+    return <div className="center" style={{ minHeight: '60vh' }}><span className="spinner" /></div>;
+  }
+  if (!user) return <SignInPrompt from={location.pathname + location.search} />;
+  return <Outlet />;
+}
+
+function SignInPrompt({ from }: { from: string }) {
+  return (
+    <div className="page page-narrow" style={{ paddingTop: 60 }}>
+      <div className="hero-panel text-center">
+        <h2>Sign in to continue</h2>
+        <p className="muted">You need a SPEED CHESS account to open this page.</p>
+        <div className="row center mt-2">
+          <Link to="/login" state={{ from }} className="btn btn-primary">Sign in</Link>
+          <Link to="/register" className="btn btn-secondary">Create account</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProtectedLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) {
     return <div className="center" style={{ minHeight: '60vh' }}><span className="spinner" /></div>;
   }
-  if (!user) {
-    return (
-      <div className="page page-narrow" style={{ paddingTop: 60 }}>
-        <div className="hero-panel text-center">
-          <h2>Sign in to continue</h2>
-          <p className="muted">You need a SPEED CHESS account to open this page.</p>
-          <div className="row center mt-2">
-            <Link to="/login" state={{ from: location.pathname }} className="btn btn-primary">Sign in</Link>
-            <Link to="/register" className="btn btn-secondary">Create account</Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return <SignInPrompt from={location.pathname + location.search} />;
   return <AppLayout />;
 }
