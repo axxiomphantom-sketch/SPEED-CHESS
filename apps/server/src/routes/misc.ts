@@ -40,14 +40,23 @@ metaRouter.get('/health', (_req, res) => {
 /**
  * Public runtime configuration for the client.
  *
- * Only ever exposes booleans and *publishable* values. Keys stay on the server: the browser learns
- * whether Supabase is wired up, never the credentials the server uses.
+ * This is the single source of truth for whether authentication is wired up. The browser used to
+ * decide that from `import.meta.env.VITE_*`, which Vite inlines at build time — so a build made
+ * without the env file folded the check to `false` and tree-shook the whole Supabase SDK out of
+ * the bundle. The app then silently used the legacy local-auth path and the two halves disagreed.
+ * Reading it from here at runtime makes that class of failure impossible.
+ *
+ * Only *publishable* values are returned. The publishable/anon key is designed to be shipped to
+ * browsers and is guarded by RLS; a service-role key must never appear in this response.
  */
 metaRouter.get('/config', (_req, res) => {
+  res.set('cache-control', 'no-store');
   res.json({
     supabase: {
       configured: Boolean(config.supabaseUrl && config.supabasePublishableKey),
       url: config.supabaseUrl || null,
+      // Named explicitly to keep it obvious that only the publishable key is ever exposed.
+      publishableKey: config.supabasePublishableKey || null,
     },
     emailConfigured: emailConfigured(),
     paymentsConfigured: Boolean(process.env.STRIPE_SECRET_KEY),

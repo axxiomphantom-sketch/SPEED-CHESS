@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { isSupabaseConfigured, signUpWithSupabase } from '../lib/supabaseAuth';
+import { isSupabaseConfigured, ensureAuthConfig, signUpWithSupabase } from '../lib/supabaseAuth';
 import { AuthShell } from '../components/AuthShell';
 import { GoogleButton } from '../components/GoogleButton';
 import { Alert, Button, Field } from '../components/ui';
@@ -54,6 +54,9 @@ export function Register() {
 
     setLoading(true);
     try {
+      // Ask the server first: the flag is runtime-loaded now, so on a cold visit it is still false.
+      await ensureAuthConfig();
+
       if (isSupabaseConfigured) {
         const result = await signUpWithSupabase({
           username: form.username.trim(),
@@ -61,13 +64,20 @@ export function Register() {
           password: form.password,
           country: form.country || undefined,
         });
-        if (!result.ok) { setError(result.message); return; }
+        if (!result.ok) {
+          // Never fall through to the local path here. A silent fallback is exactly what hid a
+          // build-time configuration failure for three rounds: sign-up "worked", but against a
+          // different identity system than the one the deployment was configured for.
+          setError(result.message);
+          return;
+        }
         // Supabase creates the account and sends the confirmation email. The player cannot reach a
         // protected page until that link is used, so we stop here rather than navigating.
         setAwaitingVerification(true);
         return;
       }
 
+      // Only reached when the server reports no Supabase configuration at all.
       await api.post('/auth/register', {
         username: form.username, email: form.email, password: form.password,
         country: form.country || undefined, ageConfirmed: form.ageConfirmed, acceptedTerms: form.acceptedTerms,

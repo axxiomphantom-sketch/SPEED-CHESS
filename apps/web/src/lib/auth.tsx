@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, type Ratings, type SessionUser } from './api';
 import { isSupabaseConfigured, signOutEverywhere, syncLocalAccount } from './supabaseAuth';
+import { loadAuthConfig } from '../utils/supabase/client';
 
 interface AuthState {
   user: SessionUser | null;
@@ -51,6 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * This removes the "verified but somehow signed out" gap without ever trusting the client.
      */
     const boot = async () => {
+      // Resolve whether Supabase is configured *before* touching the session. The flag used to be
+      // baked in at build time; now it is fetched, so it is unknown until this resolves.
+      await loadAuthConfig();
       try {
         await loadSession();
       } catch {
