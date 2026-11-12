@@ -64,7 +64,23 @@ app.use(helmet({
   // preview frames during development, and X-Frame-Options: SAMEORIGIN would break that).
   xFrameOptions: false,
 }));
-app.use(cors({ origin: config.isProd ? true : [config.appUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'], credentials: true }));
+// Allowed browser origins for cross-site API calls (e.g. a Cloudflare Worker on a different host
+// proxying to this API). Same-origin deployments need none of this: the browser sends the cookie
+// with the request and CORS never applies.
+const corsOrigins = [
+  config.appUrl,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...(process.env.CORS_ORIGINS ?? '').split(',').map(o => o.trim()).filter(Boolean),
+];
+app.use(cors({
+  origin: config.isProd
+    // `true` reflects any origin, which with credentials is only safe when the API is same-origin
+    // through a proxy. Adding CORS_ORIGINS narrows it to an explicit list.
+    ? (corsOrigins.length > 2 ? corsOrigins : true)
+    : corsOrigins,
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(attachUser);

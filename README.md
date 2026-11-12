@@ -142,6 +142,8 @@ important happens only in the browser.
 | `npm start` | Serve API + built client on `:4000` |
 | `npm run seed` | Demo accounts, reference content, demo games |
 | `npm test` | 47-test suite (rules, service, auth, puzzles, matchmaking, tournaments, DB) |
+| `npm run cf:dev` | Build then run the Cloudflare Worker locally against the real `workerd` runtime |
+| `npm run cf:deploy` | Build and deploy the SPA Worker to Cloudflare (API stays on Node — see docs/CLOUDFLARE.md) |
 | `npm run typecheck` | `tsc --noEmit` for server and web (unused-code checks on) |
 
 ## Documentation

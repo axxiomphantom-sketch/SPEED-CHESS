@@ -17,3 +17,7 @@ dist/
 data/test.db
 data/test.db-wal
 data/test.db-shm
+
+# Cloudflare local state
+.wrangler/
+.dev.vars

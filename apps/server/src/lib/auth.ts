@@ -64,11 +64,24 @@ export function createSession(userId: string, req: Request): { token: string; se
   return { token: signed, sessionId };
 }
 
+/**
+ * Session cookie attributes.
+ *
+ * Default: `SameSite=Lax`, which is correct whenever the browser talks to the API on its own
+ * origin — including the recommended Cloudflare topology, where the Worker proxies /api so the
+ * browser only ever sees one host.
+ *
+ * If the API is served from a *different* site (api.example.com behind app.example.com), Lax will
+ * not be sent on cross-site subrequests. Setting COOKIE_SAMESITE=none switches to `SameSite=None`,
+ * which browsers only honour together with `Secure` — so it also forces `secure: true`, and the API
+ * must be on HTTPS with a matching CORS_ORIGINS entry. Never use it as a way to avoid fixing CORS.
+ */
 export function cookieOptions() {
+  const crossSite = (process.env.COOKIE_SAMESITE ?? '').toLowerCase() === 'none';
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: config.isProd,
+    sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
+    secure: crossSite || config.isProd,
     maxAge: config.sessionDays * 864e5,
     path: '/',
   };
