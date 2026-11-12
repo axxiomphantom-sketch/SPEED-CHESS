@@ -2,7 +2,7 @@
   "name": "speed-chess",
   "version": "1.0.0",
   "private": true,
-  "description": "SPEED CHESS \u2014 Play. Learn. Compete. Evolve. A complete chess platform.",
+  "description": "SPEED CHESS — Play. Learn. Compete. Evolve. A complete chess platform.",
   "workspaces": [
     "apps/server",
     "apps/web",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
+    "sharp": "^0.35.5",
     "wrangler": "^4.161.0"
   },
   "dependencies": {

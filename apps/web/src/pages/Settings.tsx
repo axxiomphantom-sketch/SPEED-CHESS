@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CreditCard, Lock, Monitor, Palette, Settings as SettingsIcon, Shield, Trash2, User } from 'lucide-react';
+import { Bell, CreditCard, Download, Lock, Monitor, Palette, Settings as SettingsIcon, Shield, Smartphone, Trash2, User } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth, usePrefs } from '../lib/auth';
 import { Alert, Badge, Button, Card, CardHead, ConfirmDialog, Field, Loading, Tabs } from '../components/ui';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 const BOARD_THEMES = [
   { id: 'violet', label: 'Violet', light: '#CFC3E8', dark: '#6B4FA8' },
@@ -25,6 +26,8 @@ export function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const install = useInstallPrompt();
+  const [installNotice, setInstallNotice] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -61,6 +64,21 @@ export function Settings() {
       setDeleting(false);
       await logout();
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not delete the account.'); }
+  };
+
+  const handleInstall = async () => {
+    const outcome = await install.install();
+    if (outcome === 'unavailable') {
+      // No native prompt (iOS Safari, Firefox desktop, or already installed): give real steps
+      // rather than a button that silently does nothing.
+      setInstallNotice(
+        /iPhone|iPad|iPod/i.test(navigator.userAgent)
+          ? 'On iPhone or iPad: tap the Share button, then "Add to Home Screen".'
+          : 'Your browser has not offered an install prompt yet. Try Chrome or Edge on desktop, or use the browser menu → "Install SPEED CHESS".'
+      );
+    } else if (outcome === 'accepted') {
+      setInstallNotice('Installing SPEED CHESS… it will appear with your other apps.');
+    }
   };
 
   if (!user) return <div className="page"><Alert tone="info">Sign in to open settings.</Alert><Link to="/login" className="btn btn-primary mt-2">Sign in</Link></div>;
@@ -161,6 +179,29 @@ export function Settings() {
             <p className="tiny muted mt-1">Deletion is permanent. Export your data first from your profile page.</p>
           </Card>
         </div>
+      )}
+
+      {tab === 'appearance' && (
+        <Card>
+          <CardHead title="Install the app" subtitle="Run SPEED CHESS in its own window, with its own icon." action={<Smartphone size={15} style={{ color: 'var(--lavender)' }} />} />
+          {install.installed ? (
+            <Badge tone="success">Installed — you are running the app version</Badge>
+          ) : (
+            <>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Installing adds SPEED CHESS to your desktop or home screen. It opens full-screen without
+                browser chrome and loads instantly. It is the same account and the same games.
+              </p>
+              <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+                <Button onClick={handleInstall} loading={install.installing} icon={<Download size={15} />}>
+                  Install SPEED CHESS
+                </Button>
+                <span className="tiny muted">Version 1.0.0</span>
+              </div>
+              {installNotice && <p className="tiny muted" style={{ marginBottom: 0 }}>{installNotice}</p>}
+            </>
+          )}
+        </Card>
       )}
 
       {tab === 'notifications' && (
