@@ -70,6 +70,30 @@ export function createSupabaseServerClient(req: Request, res: Response): Supabas
   });
 }
 
+/**
+ * Cheap reachability probe against the project's Auth settings endpoint.
+ *
+ * Used only to produce an accurate error message: if this fails, a "sign in again" response would
+ * be misleading because the real cause is the network, not the caller's token.
+ */
+export async function probeSupabase(): Promise<{ ok: boolean; reason?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, reason: 'Supabase is not configured' };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${config.supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: config.supabasePublishableKey },
+      signal: controller.signal,
+    });
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status} from ${config.supabaseUrl}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: (err as Error).name === 'AbortError' ? 'timed out' : (err as Error).message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface VerifiedSupabaseUser {
   /** Supabase `auth.users.id` (a UUID). */
   id: string;

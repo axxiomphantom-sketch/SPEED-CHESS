@@ -45,7 +45,21 @@ supabaseAuthRouter.post('/sync', async (req: AuthedRequest, res) => {
     });
   }
   const verified = await readSupabaseUser(req, res);
-  if (!verified) return res.status(401).json({ error: 'Sign in again to continue.' });
+  if (!verified) {
+    // Distinguish "bad token" from "this server cannot reach Supabase". Both are 401-class, but
+    // reporting a network failure as a bad password sends people chasing the wrong problem.
+    const { probeSupabase } = await import('../lib/supabase.js');
+    const reachable = await probeSupabase();
+    if (!reachable.ok) {
+      console.error('[auth] Supabase unreachable:', reachable.reason);
+      return res.status(502).json({
+        error: 'This server cannot reach the Supabase project. Check the project URL and that outbound HTTPS to supabase.co is allowed.',
+        supabaseReachable: false,
+        reason: reachable.reason,
+      });
+    }
+    return res.status(401).json({ error: 'Sign in again to continue.', supabaseReachable: true });
+  }
 
   // Unverified addresses get a specific, friendly error — they must confirm before entering.
   if (!verified.emailVerified) {

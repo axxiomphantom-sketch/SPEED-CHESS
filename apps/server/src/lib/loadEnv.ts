@@ -13,7 +13,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(here, '../../..');
+// src/lib -> src -> server -> apps -> repo root. (config.ts sits in src/ and needs one fewer hop;
+// an earlier version copied that depth here and silently looked in apps/ instead of the repo root.)
+const ROOT = path.resolve(here, '../../../..');
 
 const CANDIDATES = ['.env.local', '.env'];
 
