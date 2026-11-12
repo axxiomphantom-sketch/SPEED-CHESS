@@ -314,6 +314,19 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, recipient_id, created_at);
 
+-- In-game chat. Kept separate from `messages` on purpose: private messaging is a two-party inbox,
+-- whereas game chat is scoped to one game, readable by anyone watching it (spectators), and must
+-- disappear from view once the game is over. Overloading `messages` would have meant an optional
+-- game_id plus a second set of access rules on the same table.
+CREATE TABLE IF NOT EXISTS game_messages (
+  id         TEXT PRIMARY KEY,
+  game_id    TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_game_messages_game ON game_messages(game_id, created_at);
+
 CREATE TABLE IF NOT EXISTS clubs (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,

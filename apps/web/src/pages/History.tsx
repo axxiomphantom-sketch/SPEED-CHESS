@@ -4,6 +4,15 @@ import { ChevronLeft, ChevronRight, Download, History as HistoryIcon, Swords } f
 import { api, duration, formatDateTime } from '../lib/api';
 import { Button, Card, Empty, Loading } from '../components/ui';
 
+interface ResultRecord {
+  played: number; wins: number; losses: number; draws: number; winRate: number;
+}
+
+interface HistoryRecord extends ResultRecord {
+  /** Per time control, so a player can see where they are strong. */
+  byCategory: Record<string, ResultRecord>;
+}
+
 interface HistoryGame {
   id: string; opponent: string; opponentRating: number | null; color: string; result: 'win' | 'loss' | 'draw';
   termination: string | null; category: string; mode: string; rated: boolean; opening: string | null;
@@ -13,6 +22,7 @@ interface HistoryGame {
 export function History() {
   const [games, setGames] = useState<HistoryGame[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [record, setRecord] = useState<HistoryRecord | null>(null);
   const [filters, setFilters] = useState({ category: '', outcome: '', mode: '' });
   const [page, setPage] = useState(0);
   const pageSize = 20;
@@ -23,9 +33,11 @@ export function History() {
     if (filters.outcome) params.set('outcome', filters.outcome);
     if (filters.mode) params.set('mode', filters.mode);
     try {
-      const res = await api.get<{ games: HistoryGame[]; total: number }>(`/history?${params.toString()}`);
+      const res = await api.get<{ games: HistoryGame[]; total: number; record: HistoryRecord }>(`/history?${params.toString()}`);
       setGames(res.games);
       setTotal(res.total);
+      // Assigned every load: the record ignores filters, so this stays stable while paging.
+      setRecord(res.record);
     } catch { setGames([]); }
   }, [filters, page]);
 
@@ -43,6 +55,58 @@ export function History() {
         </div>
         <Link to="/analysis" className="btn btn-secondary">Import a PGN</Link>
       </header>
+
+      {record && record.played > 0 && (
+        <Card padded style={{ marginBottom: 16 }}>
+          <div className="row-between" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <span className="label">Lifetime record</span>
+              <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+                From {record.played} finished {record.played === 1 ? 'game' : 'games'} — unaffected by the filters below.
+              </p>
+            </div>
+            <span className="badge badge-purple">{record.winRate}% win rate</span>
+          </div>
+
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14 }}>
+            {([
+              ['Wins', record.wins, 'var(--success, #22c55e)'],
+              ['Losses', record.losses, 'var(--danger, #ef4444)'],
+              ['Draws', record.draws, 'var(--lavender)'],
+              ['Played', record.played, 'inherit'],
+            ] as const).map(([label, value, color]) => (
+              <div key={label}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, color }}>
+                  {value}
+                </div>
+                <div className="tiny muted">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* A proportion bar is easier to read at a glance than four separate numbers. */}
+          <div style={{ display: 'flex', height: 6, borderRadius: 4, overflow: 'hidden', marginTop: 14, background: '#16161d' }}
+            role="img" aria-label={`${record.wins} wins, ${record.draws} draws, ${record.losses} losses`}>
+            <div style={{ width: `${(record.wins / record.played) * 100}%`, background: 'var(--success, #22c55e)' }} />
+            <div style={{ width: `${(record.draws / record.played) * 100}%`, background: 'var(--lavender)', opacity: .7 }} />
+            <div style={{ width: `${(record.losses / record.played) * 100}%`, background: 'var(--danger, #ef4444)' }} />
+          </div>
+
+          {Object.keys(record.byCategory).length > 1 && (
+            <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+              {['bullet', 'blitz', 'rapid', 'classical'].filter(c => record.byCategory[c]).map(c => {
+                const r = record.byCategory[c];
+                return (
+                  <span key={c} className="tiny muted">
+                    <strong style={{ color: 'var(--lavender)', textTransform: 'capitalize' }}>{c}</strong>{' '}
+                    {r.wins}W / {r.draws}D / {r.losses}L
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card padded className="mb-2" style={{ marginBottom: 16 }}>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>

@@ -27,10 +27,56 @@ historyRouter.get('/', requireAuth, (req: AuthedRequest, res) => {
   params.push(...outcomeParams);
 
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM games WHERE ${where}`).get(...params) as { n: number }).n;
+
+  /**
+   * Lifetime win/loss/draw record.
+   *
+   * Counted over *all* finished games, deliberately ignoring the filters above: the header is the
+   * player's record, so it must not change when they click "blitz" or "loss" in the filter row.
+   * The numbers are derived from the games table rather than stored counters, so they cannot drift
+   * out of sync with the list below.
+   */
+  const record = db.prepare(
+    `SELECT
+       COUNT(*) AS played,
+       SUM(CASE WHEN (white_id = ? AND result = 'white') OR (black_id = ? AND result = 'black') THEN 1 ELSE 0 END) AS wins,
+       SUM(CASE WHEN (white_id = ? AND result = 'black') OR (black_id = ? AND result = 'white') THEN 1 ELSE 0 END) AS losses,
+       SUM(CASE WHEN result = 'draw' THEN 1 ELSE 0 END) AS draws
+     FROM games
+     WHERE (white_id = ? OR black_id = ?) AND status = 'finished'`,
+  ).get(uid, uid, uid, uid, uid, uid) as {
+    played: number; wins: number | null; losses: number | null; draws: number | null;
+  };
+
+  // Per-category record, so the page can show where a player is strong without extra requests.
+  const byCategory = db.prepare(
+    `SELECT g.category,
+       COUNT(*) AS played,
+       SUM(CASE WHEN (g.white_id = ? AND g.result = 'white') OR (g.black_id = ? AND g.result = 'black') THEN 1 ELSE 0 END) AS wins,
+       SUM(CASE WHEN (g.white_id = ? AND g.result = 'black') OR (g.black_id = ? AND g.result = 'white') THEN 1 ELSE 0 END) AS losses,
+       SUM(CASE WHEN g.result = 'draw' THEN 1 ELSE 0 END) AS draws
+     FROM games g
+     WHERE (g.white_id = ? OR g.black_id = ?) AND g.status = 'finished'
+     GROUP BY g.category`,
+  ).all(uid, uid, uid, uid, uid, uid) as Array<{
+    category: string; played: number; wins: number | null; losses: number | null; draws: number | null;
+  }>;
+
+  const toRecord = (r: { played: number; wins: number | null; losses: number | null; draws: number | null }) => ({
+    played: r.played,
+    wins: r.wins ?? 0,
+    losses: r.losses ?? 0,
+    draws: r.draws ?? 0,
+    winRate: r.played ? Math.round((((r.wins ?? 0) / r.played) * 100)) : 0,
+  });
   const rows = db.prepare(`SELECT * FROM games WHERE ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?`)
     .all(...params, limit, offset) as any[];
   res.json({
     total,
+    record: {
+      ...toRecord(record),
+      byCategory: Object.fromEntries(byCategory.map(r => [r.category, toRecord(r)])),
+    },
     games: rows.map(g => {
       const isWhite = g.white_id === uid;
       const result = g.result === 'draw' ? 'draw'

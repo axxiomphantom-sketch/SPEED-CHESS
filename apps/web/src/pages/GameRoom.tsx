@@ -7,6 +7,7 @@ import { useAuth, usePrefs } from '../lib/auth';
 import { Alert, Avatar, Badge, Button, Card, CardHead, ConfirmDialog, CopyButton, Modal } from '../components/ui';
 import { ChessBoard } from '../components/board/ChessBoard';
 import { useGameSocket } from '../hooks/useGameSocket';
+import { GameChat } from '../components/GameChat';
 import { useChessSound } from '../hooks/useChessSound';
 
 const TERMINATION_TEXT: Record<string, string> = {
@@ -52,7 +53,12 @@ export function GameRoom() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [lastEvent, setLastEvent] = useState<{ type: string; [key: string]: any } | null>(null);
+
   useGameSocket(msg => {
+    // Forwarded to GameChat. One socket per page: opening a second connection for chat would
+    // double the load and make reconnection logic fight itself.
+    setLastEvent(msg);
     if (msg.game && msg.game.id === id) {
       setGame(msg.game);
       localClocks.current = msg.game.clocks;
@@ -331,6 +337,13 @@ export function GameRoom() {
               </div>
             </Card>
           )}
+
+          <GameChat
+            gameId={game.id}
+            lastEvent={lastEvent}
+            readOnly={game.status === 'finished'}
+            closedReason={game.status === 'finished' ? 'This game has finished, so chat is closed.' : undefined}
+          />
 
           {game.mode === 'online' && game.status === 'active' && game.inviteCode && (
             <Card padded>
