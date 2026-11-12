@@ -1,0 +1,23 @@
+node_modules/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/.jwt-secret
+data/uploads/*
+!data/uploads/.gitkeep
+apps/web/dist/
+*.tsbuildinfo
+dist/
+.env
+.env.local
+.env.*.local
+.env*.local
+*.log
+.DS_Store
+data/test.db
+data/test.db-wal
+data/test.db-shm
+
+# Cloudflare local state
+.wrangler/
+.dev.vars

@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "speed-chess",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The built SPA is uploaded as static assets. `not_found_handling` gives client-side routing
+  // (React Router) working deep links without a catch-all route in the Worker.
+  "assets": {
+    "directory": "./apps/web/dist",
+    "not_found_handling": "single-page-application",
+    // Only dynamic paths enter the Worker; everything else is served as a static asset by
+    // Cloudflare's edge, including the SPA fallback for deep links.
+    "run_worker_first": ["/api/*", "/ws", "/ws/*", "/uploads/*"]
+  },
+
+  // The Express API origin. Set it once per environment:
+  //   wrangler secret put API_ORIGIN          (production)
+  //   or edit the var below for staging.
+  // Never point this at localhost in production.
+  "vars": {
+    "API_ORIGIN": ""
+  },
+
+  "observability": { "enabled": true },
+
+  "env": {
+    "staging": {
+      "name": "speed-chess-staging",
+      "vars": { "API_ORIGIN": "" }
+    }
+  }
+}

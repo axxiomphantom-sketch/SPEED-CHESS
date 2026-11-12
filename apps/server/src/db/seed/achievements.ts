@@ -1,0 +1,16 @@
+export const achievements = [
+  { id: 'first_game', name: 'First Move', description: 'Complete your first game', icon: 'flag', tier: 'bronze', category: 'games', target: 1 },
+  { id: 'first_win', name: 'First Victory', description: 'Win your first game', icon: 'trophy', tier: 'bronze', category: 'games', target: 1 },
+  { id: 'first_draw', name: 'Hold the Draw', description: 'Draw your first game', icon: 'handshake', tier: 'bronze', category: 'games', target: 1 },
+  { id: 'games_25', name: 'Regular Player', description: 'Play 25 games', icon: 'calendar', tier: 'silver', category: 'games', target: 25 },
+  { id: 'wins_10', name: 'Winning Habit', description: 'Win 10 games', icon: 'medal', tier: 'silver', category: 'games', target: 10 },
+  { id: 'lesson_1', name: 'First Lesson', description: 'Complete your first lesson', icon: 'book-open', tier: 'bronze', category: 'learning', target: 1 },
+  { id: 'lessons_10', name: 'Student', description: 'Complete 10 lessons', icon: 'graduation-cap', tier: 'silver', category: 'learning', target: 10 },
+  { id: 'course_1', name: 'Course Complete', description: 'Finish every lesson in a course', icon: 'award', tier: 'gold', category: 'learning', target: 1 },
+  { id: 'puzzle_1', name: 'First Solve', description: 'Solve your first puzzle', icon: 'puzzle', tier: 'bronze', category: 'training', target: 1 },
+  { id: 'puzzles_25', name: 'Tactician', description: 'Solve 25 puzzles', icon: 'zap', tier: 'silver', category: 'training', target: 25 },
+  { id: 'tournament_join', name: 'Competitor', description: 'Register for a tournament', icon: 'swords', tier: 'bronze', category: 'competition', target: 1 },
+  { id: 'tournament_win', name: 'Tournament Win', description: 'Win a game in a tournament', icon: 'crown', tier: 'gold', category: 'competition', target: 1 },
+  { id: 'rating_1400', name: 'Rising Star', description: 'Reach a rating of 1400', icon: 'trending-up', tier: 'silver', category: 'progression', target: 1400 },
+  { id: 'rating_1800', name: 'Diamond Class', description: 'Reach a rating of 1800', icon: 'gem', tier: 'platinum', category: 'progression', target: 1800 },
+] as const;
