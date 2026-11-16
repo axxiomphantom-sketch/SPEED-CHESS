@@ -39,9 +39,24 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 Both come from **Project Settings → Data API** (URL) and **API Keys** (publishable key). The
 publishable key is designed for browsers: every table it can reach is protected by RLS.
 
-The API reads the same two variables automatically, so there is one source of truth. If your host
-injects secrets under different names, set `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` instead —
-those take precedence.
+**Which variable goes where:**
+
+| Variable | Read by | Notes |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | frontend build | Inlined into the bundle by Vite. |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | frontend build | Publishable key only. |
+| `SUPABASE_URL` | API | Preferred on the server. |
+| `SUPABASE_PUBLISHABLE_KEY` | API | Preferred on the server. |
+
+The API prefers `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` and **falls back** to the `VITE_` pair,
+so one `.env.local` configures both halves. A blank value counts as unset, so an empty assignment in
+a host's dashboard cannot override a working `VITE_` value.
+
+The frontend reads the `VITE_` values at build time. It also asks `GET /api/meta/config` at runtime,
+which keeps the browser and API pointed at the same project even if the bundle was built without
+them.
+
+> This is a Vite project. `NEXT_PUBLIC_*` variables do nothing here.
 
 **Never** put a service-role key in any `VITE_` variable. `VITE_` values are compiled into the
 public JavaScript bundle.
@@ -219,13 +234,14 @@ client falls back to the legacy login, and nothing pretends to work.
 
 | Variable | Where | Required | Notes |
 | --- | --- | --- | --- |
-| `VITE_SUPABASE_URL` | client + server | yes | `https://<ref>.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | client + server | yes | Publishable/anon key. Public. |
-| `SUPABASE_URL` | server | optional | Overrides the `VITE_` value. |
-| `SUPABASE_PUBLISHABLE_KEY` | server | optional | Overrides the `VITE_` value. |
+| `VITE_SUPABASE_URL` | frontend (build time) | yes | `https://<ref>.supabase.co` — no `/rest/v1` suffix |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | frontend (build time) | yes | Publishable/anon key. Public. |
+| `SUPABASE_URL` | API | optional | Takes precedence over `VITE_SUPABASE_URL` |
+| `SUPABASE_PUBLISHABLE_KEY` | API | optional | Takes precedence over `VITE_SUPABASE_PUBLISHABLE_KEY` |
 
 The API loads `.env.local` itself (Vite only does that for the browser bundle), so one file configures
-both. Real environment variables take precedence over the file.
+both. Real environment variables take precedence over the file, and a blank value is treated as
+unset.
 
 ---
 
@@ -238,8 +254,9 @@ everywhere:
 * **Arena preview** — the proxied preview origin; no extra configuration
 * **Production** — your real domain
 
-The only per-environment requirement is that `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY` are present in that environment. If you prefer
+The only per-environment requirement is that the Supabase values are present in that environment —
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` for the frontend build, and either pair for
+the API. If you prefer
 `{{ .ConfirmationURL }}` links, you must instead register each origin under **Redirect URLs**.
 
 ---

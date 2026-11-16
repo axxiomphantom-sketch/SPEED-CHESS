@@ -6,6 +6,30 @@ import { fileURLToPath } from 'node:url';
 import './lib/loadEnv.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** First value that is actually present and non-blank; empty string when none is. */
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+}
+
+/**
+ * Resolves the Supabase settings from an environment.
+ *
+ * Pure and exported so the precedence rule is directly testable: the server prefers its own names
+ * and falls back to the `VITE_` pair the frontend build uses, and a blank value counts as unset.
+ * Taking `env` as an argument (instead of reading `process.env`) is what lets a test assert all
+ * four combinations without mutating the real environment.
+ */
+export function resolveSupabaseConfig(env: Record<string, string | undefined>): { url: string; key: string } {
+  return {
+    url: firstNonEmpty(env.SUPABASE_URL, env.VITE_SUPABASE_URL),
+    key: firstNonEmpty(env.SUPABASE_PUBLISHABLE_KEY, env.VITE_SUPABASE_PUBLISHABLE_KEY),
+  };
+}
 export const ROOT = path.resolve(here, '../../..');
 export const DATA_DIR = process.env.DATA_DIR ?? path.join(ROOT, 'data');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
@@ -38,8 +62,16 @@ export const config = {
     : path.join(DATA_DIR, 'speed-chess.db'),
   allowEmailVerificationBypass: process.env.EMAIL_VERIFICATION_REQUIRED !== 'true',
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
-  /** Supabase project URL (public). Empty string when unset so nothing invents a hostname. */
-  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '',
+  /**
+   * Supabase project URL (public). Empty string when unset so nothing invents a hostname.
+   *
+   * The server prefers its own names (`SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`) and falls back
+   * to the `VITE_` pair, so a single `.env.local` written for the frontend configures the API too.
+   * Keep the fallback: removing it would break every deployment that only sets the `VITE_` values.
+   * A blank string counts as unset, otherwise an empty assignment in a host's dashboard would
+   * silently override a working `VITE_` value.
+   */
+  supabaseUrl: resolveSupabaseConfig(process.env).url,
   /** Publishable/anon key. Never a service-role key: this value is also shipped to the browser. */
-  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '',
+  supabasePublishableKey: resolveSupabaseConfig(process.env).key,
 };
