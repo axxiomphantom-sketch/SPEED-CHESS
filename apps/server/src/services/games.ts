@@ -13,6 +13,10 @@ export interface GameRow {
   status: string; result: string | null; termination: string | null; white_clock_ms: number;
   black_clock_ms: number; turn: string; opening_name: string | null; tournament_id: string | null;
   is_private: number; invite_code: string | null; started_at: string; finished_at: string | null;
+  /** `users.id` of the creator, for local/computer games the creator can review later. */
+  owner_id: string | null;
+  /** `guest_sessions.id` when a guest created the game. Guests have no `users` row. */
+  guest_owner_id: string | null;
   accuracy_white: number | null; accuracy_black: number | null; updated_at: string;
 }
 
@@ -65,6 +69,8 @@ export interface CreateGameOptions {
   blackId?: string | null;
   /** Set for games where a player owns the record without playing a colour (local hot-seat, imports). */
   ownerId?: string | null;
+  /** Guest session id for a game created without an account. Mutually exclusive with `ownerId`. */
+  guestOwnerId?: string | null;
   mode: 'computer' | 'online' | 'local' | 'tournament';
   seconds: number;
   increment: number;
@@ -86,11 +92,12 @@ export function createGame(opts: CreateGameOptions): GameRow {
   const blackName = opts.blackName ?? (opts.blackId ? usernameOf(opts.blackId)
     : opts.mode === 'computer' ? `Computer (${opts.difficulty ?? 'easy'})` : 'Black');
   db.prepare(
-    `INSERT INTO games (id, white_id, black_id, owner_id, white_name, black_name, white_rating, black_rating, mode, rated, category,
+    `INSERT INTO games (id, white_id, black_id, owner_id, guest_owner_id, white_name, black_name, white_rating, black_rating, mode, rated, category,
        initial_seconds, increment, difficulty, fen, status, white_clock_ms, black_clock_ms, turn, tournament_id, is_private, invite_code, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
-    gameId, opts.whiteId ?? null, opts.blackId ?? null, opts.ownerId ?? opts.whiteId ?? opts.blackId ?? null,
+    gameId, opts.whiteId ?? null, opts.blackId ?? null,
+    opts.ownerId ?? opts.whiteId ?? opts.blackId ?? null, opts.guestOwnerId ?? null,
     whiteName, blackName, whiteRating, blackRating,
     opts.mode, opts.rated ? 1 : 0, category, opts.seconds, opts.increment, opts.difficulty ?? null, START_FEN, 'active',
     opts.seconds * 1000, opts.seconds * 1000, 'w', opts.tournamentId ?? null, opts.isPrivate ? 1 : 0,
@@ -130,16 +137,37 @@ export function sideOf(game: GameRow, userId: string | undefined): 'w' | 'b' | n
   return null;
 }
 
-/** Applies a legal move after validating turn ownership, clocks and rules. */
-export function applyMove(gameId: string, userId: string | undefined, from: string, to: string, promotion?: string): MoveResult {
+/**
+ * Applies a legal move after validating turn ownership, clocks and rules.
+ *
+ * `isGuestOwner` exists because a guest has no `users` id to match against `white_id`. The guest is
+ * always the human in a computer game — that is, White — so passing it claims exactly that seat and
+ * nothing more. It can never be used to move for a real account, and it does not bypass the turn
+ * check, so a guest cannot move on the engine's turn any more than a signed-in player can.
+ */
+export function applyMove(
+  gameId: string,
+  userId: string | undefined,
+  from: string,
+  to: string,
+  promotion?: string,
+  isGuestOwner = false,
+): MoveResult {
   const game = gameById(gameId);
   if (!game) return { ok: false, error: 'Game not found' };
   if (game.status !== 'active') return { ok: false, error: 'This game has already finished' };
   const side = sideOf(game, userId);
   // Computer games have no Black user: the engine moves as the side opposite the human player.
-  const isEngineTurn = game.mode === 'computer' && userId === undefined && game.turn === 'b';
-  if (game.mode !== 'local' && !side && !isEngineTurn) return { ok: false, error: 'You are not a player in this game' };
+  const isEngineTurn = game.mode === 'computer' && userId === undefined && !isGuestOwner && game.turn === 'b';
+  // A guest owner sits in the human seat of a computer game, which is always White.
+  const isGuestTurn = isGuestOwner && game.mode === 'computer' && game.turn === 'w';
+  if (game.mode !== 'local' && !side && !isEngineTurn && !isGuestTurn) {
+    return { ok: false, error: 'You are not a player in this game' };
+  }
   if (side && side !== game.turn) return { ok: false, error: 'It is not your turn' };
+  if (isGuestOwner && game.mode === 'computer' && game.turn === 'b') {
+    return { ok: false, error: 'It is the computer\'s turn' };
+  }
   if (game.mode === 'computer' && userId !== undefined && game.turn === 'b') {
     return { ok: false, error: 'It is the computer\'s turn' };
   }

@@ -7,7 +7,7 @@ import { Alert, Avatar, Badge, Button, Card, CardHead, Empty, Field, Loading, Mo
 
 interface CoachProfile {
   username: string; headline: string; expertise: string[]; languages: string[]; rate: number | null;
-  currency: string | null; accepting: boolean; verified: boolean; country: string | null; avatarUrl: string | null;
+  currency: string | null; accepting: boolean; verified: boolean; country: string | null; avatarUrl: string | null; avatarIcon?: string | null;
   rating: number; title: string | null;
 }
 
@@ -101,7 +101,7 @@ export function Coaching() {
             {coaches.map(coach => (
               <Card key={coach.username} hover>
                 <div className="row" style={{ gap: 12 }}>
-                  <Avatar name={coach.username} src={coach.avatarUrl} size="lg" />
+                  <Avatar name={coach.username} src={coach.avatarUrl} icon={coach.avatarIcon} size="lg" />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row" style={{ gap: 6 }}>
                       <Link to={`/players/${coach.username}`} style={{ fontWeight: 700, color: '#fff' }}>{coach.username}</Link>

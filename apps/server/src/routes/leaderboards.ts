@@ -25,7 +25,7 @@ leaderboardsRouter.get('/', (req: AuthedRequest, res) => {
   }
 
   const ranked = db.prepare(
-    `SELECT u.id, u.username, u.country, u.avatar_url, u.title, u.show_country, r.rating, r.games, r.peak,
+    `SELECT u.id, u.username, u.country, u.avatar_url, u.avatar_icon, u.title, u.show_country, r.rating, r.games, r.peak,
        (SELECT COUNT(*) FROM games g WHERE (g.white_id = u.id OR g.black_id = u.id) AND g.status = 'finished') AS total_games,
        (SELECT COUNT(*) FROM games g WHERE g.status = 'finished' AND ((g.white_id = u.id AND g.result = 'white') OR (g.black_id = u.id AND g.result = 'black'))) AS wins
      FROM ratings r JOIN users u ON u.id = r.user_id
@@ -41,7 +41,7 @@ leaderboardsRouter.get('/', (req: AuthedRequest, res) => {
       id: r.id,
       username: r.username,
       country: r.show_country ? r.country : null,
-      avatarUrl: r.avatar_url,
+      avatarUrl: r.avatar_url, avatarIcon: r.avatar_icon,
       title: r.title,
       rating: Math.round(r.rating),
       peak: Math.round(r.peak),

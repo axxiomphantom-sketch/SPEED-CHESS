@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { config, WEB_DIST, UPLOAD_DIR } from './config.js';
 import { db, migrate } from './db/index.js';
 import { attachUser, requireAuth, type AuthedRequest } from './lib/auth.js';
+import { attachGuest, sweepExpiredGuests } from './lib/guest.js';
 import { authRouter } from './routes/auth.js';
 import { supabaseAuthRouter } from './routes/supabaseAuth.js';
 import { gamesRouter, playRouter } from './routes/games.js';
@@ -84,6 +85,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(attachUser);
+app.use(attachGuest);
 
 const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 40, standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many attempts. Please wait a few minutes and try again.' } });
@@ -152,6 +154,17 @@ const timeoutSweep = setInterval(() => {
   try { sweepTimeouts(); } catch (err) { console.error('[timeouts]', err); }
 }, 5000);
 
+// Guest sessions and their unfinished games are disposable; expired tokens already fail to
+// authenticate (the query checks expiry), so this is housekeeping rather than a security gate.
+function runGuestSweep() {
+  try {
+    const { guests, games } = sweepExpiredGuests();
+    if (guests) console.log(`[guests] swept ${guests} expired session(s), ${games} unfinished game(s)`);
+  } catch (err) { console.error('[guests]', err); }
+}
+runGuestSweep();
+const guestSweep = setInterval(runGuestSweep, 3600_000);
+
 server.listen(config.port, '0.0.0.0', () => {
   console.log(`[server] SPEED CHESS API listening on http://0.0.0.0:${config.port} (${config.nodeEnv})`);
   const counts = {
@@ -164,6 +177,7 @@ server.listen(config.port, '0.0.0.0', () => {
 
 function shutdown() {
   clearInterval(timeoutSweep);
+  clearInterval(guestSweep);
   server.close(() => {
     db.close();
     process.exit(0);

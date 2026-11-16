@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type CSS
 import { Link } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Info, Loader2, X } from 'lucide-react';
 import { initials } from '../lib/api';
+import { avatarPresetDataUrl, isAvatarIcon } from '../lib/avatars';
 
 /* ---------- Button ---------- */
 type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' | 'success';
@@ -50,11 +51,26 @@ export function Badge({ children, tone = 'default', className = '' }: { children
 }
 
 /* ---------- Avatar ---------- */
-export function Avatar({ name, src, size = 'md', online }: { name: string; src?: string | null; size?: 'sm' | 'md' | 'lg' | 'xl'; online?: boolean }) {
+/**
+ * Renders the player's avatar, resolving three sources in order:
+ *   1. an uploaded photo (`src`)
+ *   2. a preset (`icon`, e.g. `knight-violet`)
+ *   3. initials
+ *
+ * Every avatar in the app goes through here, so adding presets needed no changes at the ~20 call
+ * sites — they already pass a user object's fields through.
+ */
+export function Avatar({ name, src, icon, size = 'md', online }: {
+  name: string; src?: string | null; icon?: string | null;
+  size?: 'sm' | 'md' | 'lg' | 'xl'; online?: boolean;
+}) {
   const cls = size === 'sm' ? 'avatar-sm' : size === 'lg' ? 'avatar-lg' : size === 'xl' ? 'avatar-xl' : '';
+  const preset = !src && isAvatarIcon(icon) ? avatarPresetDataUrl(icon) : null;
   return (
     <span className={`avatar ${cls}`} style={{ position: 'relative' }}>
-      {src ? <img src={src} alt="" /> : initials(name)}
+      {src ? <img src={src} alt="" />
+        : preset ? <img src={preset} alt="" />
+          : initials(name)}
       {online !== undefined && (
         <span
           className={online ? 'online-dot' : 'offline-dot'}

@@ -113,7 +113,7 @@ export function ClubDetail() {
             <CardHead title="Top members" />
             {data.members.slice(0, 6).map((member: any) => (
               <div key={member.id} className="list-row">
-                <Avatar name={member.username} src={member.avatarUrl} size="sm" online={member.online} />
+                <Avatar name={member.username} src={member.avatarUrl} icon={member.avatarIcon} size="sm" online={member.online} />
                 <div className="grow">
                   <Link to={`/players/${member.username}`} style={{ fontWeight: 600, color: '#fff', fontSize: '.88rem' }}>{member.username}</Link>
                   <div className="tiny muted">{member.rating} blitz</div>
@@ -135,7 +135,7 @@ export function ClubDetail() {
                   <tr key={member.id}>
                     <td>
                       <Link to={`/players/${member.username}`} className="row" style={{ gap: 8, color: 'inherit', textDecoration: 'none' }}>
-                        <Avatar name={member.username} src={member.avatarUrl} size="sm" online={member.online} />
+                        <Avatar name={member.username} src={member.avatarUrl} icon={member.avatarIcon} size="sm" online={member.online} />
                         <span style={{ fontWeight: 600 }}>{member.username}</span>
                       </Link>
                     </td>

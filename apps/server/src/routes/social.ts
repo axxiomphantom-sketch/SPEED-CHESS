@@ -29,7 +29,7 @@ export function areFriends(a: string, b: string): boolean {
 friendsRouter.get('/', requireAuth, (req: AuthedRequest, res) => {
   const uid = req.user!.id;
   const rows = db.prepare(
-    `SELECT f.id, f.status, f.requester_id, f.created_at, u.id AS user_id, u.username, u.country, u.avatar_url, u.last_seen_at,
+    `SELECT f.id, f.status, f.requester_id, f.created_at, u.id AS user_id, u.username, u.country, u.avatar_url, u.avatar_icon, u.last_seen_at,
        (SELECT rating FROM ratings WHERE user_id = u.id AND category = 'blitz') AS blitz
      FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
      WHERE (f.requester_id = ? OR f.addressee_id = ?) AND f.status IN ('accepted','pending')
@@ -125,7 +125,7 @@ friendsRouter.get('/activity', requireAuth, (req: AuthedRequest, res) => {
 messagesRouter.get('/threads', requireAuth, (req: AuthedRequest, res) => {
   const uid = req.user!.id;
   const rows = db.prepare(
-    `SELECT m.*, u.username, u.avatar_url FROM messages m
+    `SELECT m.*, u.username, u.avatar_url, u.avatar_icon FROM messages m
        JOIN users u ON u.id = CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END
       WHERE m.sender_id = ? OR m.recipient_id = ?
       ORDER BY m.created_at DESC`
@@ -135,7 +135,7 @@ messagesRouter.get('/threads', requireAuth, (req: AuthedRequest, res) => {
     const otherId = m.sender_id === uid ? m.recipient_id : m.sender_id;
     if (!threads.has(otherId)) {
       threads.set(otherId, {
-        userId: otherId, username: m.username, avatarUrl: m.avatar_url,
+        userId: otherId, username: m.username, avatarUrl: m.avatar_url, avatarIcon: m.avatar_icon,
         lastMessage: m.body, lastAt: m.created_at,
         unread: rows.filter(x => x.sender_id === otherId && !x.read_at).length,
       });

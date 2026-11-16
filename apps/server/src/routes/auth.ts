@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { db, nowIso } from '../db/index.js';
 import { config } from '../config.js';
 import { COOKIE_NAME, cookieOptions, createSession, requireAuth, resolveSession, toPublicUser, type AuthedRequest } from '../lib/auth.js';
+import {
+  GUEST_COOKIE, clearGuestCookieOptions, createGuest, guestCookieOptions, setGuestIcon,
+} from '../lib/guest.js';
 import { hashPassword, passwordIssues, verifyPassword } from '../lib/password.js';
 import { id, sha256, token } from '../lib/ids.js';
 import { audit, getUserRating, notify } from '../lib/service.js';
@@ -78,10 +81,45 @@ authRouter.post('/login', async (req, res) => {
   res.json({ user: toPublicUser(row) });
 });
 
+/**
+ * Starts a disposable guest session.
+ *
+ * Guests exist so a first-time visitor can play the computer before being asked for an email. They
+ * deliberately get no `users` row, so nothing social can reference them. If a signed-in player calls
+ * this, the guest cookie is issued but their real session takes precedence everywhere `req.user` is
+ * consulted — guest context is only ever used where no account is present.
+ */
+authRouter.post('/guest', (req, res) => {
+  const icon = typeof req.body?.icon === 'string' && req.body.icon.length <= 40 ? req.body.icon : null;
+  const { token: raw, guest, expiresAt } = createGuest(icon);
+  res.cookie(GUEST_COOKIE, raw, guestCookieOptions());
+  res.status(201).json({
+    guest: { displayName: guest.displayName, avatarIcon: guest.avatarIcon, expiresAt },
+    // Guests keep nothing server-side beyond their games; say so rather than implying an account.
+    account: false,
+  });
+});
+
+/** Returns the current guest identity, or `guest: null` when there is none. Never 401s. */
+authRouter.get('/guest', (req: AuthedRequest, res) => {
+  res.json({ guest: req.guest ?? null });
+});
+
+/** Updates the guest's chosen icon so it survives a refresh. */
+authRouter.patch('/guest', (req: AuthedRequest, res) => {
+  const schema = z.object({ icon: z.string().trim().min(1).max(40) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid icon' });
+  if (!req.guest) return res.status(404).json({ error: 'No guest session' });
+  setGuestIcon(req.guest.id, parsed.data.icon);
+  res.json({ ok: true, icon: parsed.data.icon });
+});
+
 authRouter.post('/logout', (req, res) => {
   const resolved = resolveSession(req.cookies?.[COOKIE_NAME]);
   if (resolved) db.prepare('UPDATE sessions SET revoked_at = ? WHERE id = ?').run(nowIso(), resolved.sessionId);
   res.clearCookie(COOKIE_NAME, { path: '/' });
+  res.clearCookie(GUEST_COOKIE, clearGuestCookieOptions());
   res.json({ ok: true });
 });
 

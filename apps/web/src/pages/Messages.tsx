@@ -5,7 +5,7 @@ import { api, ApiError, timeAgo } from '../lib/api';
 import { Alert, Avatar, Badge, Button, Card, Empty, Loading } from '../components/ui';
 
 interface Thread {
-  userId: string; username: string; avatarUrl: string | null; lastMessage: string; lastAt: string; unread: number;
+  userId: string; username: string; avatarUrl: string | null; avatarIcon?: string | null; lastMessage: string; lastAt: string; unread: number;
 }
 
 export function Messages() {
@@ -87,7 +87,7 @@ export function Messages() {
                     border: 'none', borderBottom: '1px solid #26262f', cursor: 'pointer', color: 'inherit', textAlign: 'left', padding: '9px 8px',
                     borderRadius: 8,
                   }}>
-                  <Avatar name={thread.username} src={thread.avatarUrl} size="sm" />
+                  <Avatar name={thread.username} src={thread.avatarUrl} icon={thread.avatarIcon} size="sm" />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row-between"><strong style={{ fontSize: '.86rem' }}>{thread.username}</strong><span className="tiny muted">{timeAgo(thread.lastAt)}</span></div>
                     <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{thread.lastMessage}</div>
@@ -109,7 +109,7 @@ export function Messages() {
             <>
               <div className="row-between" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10, marginBottom: 12 }}>
                 <div className="row" style={{ gap: 10 }}>
-                  <Avatar name={conversation.with.username} src={conversation.with.avatarUrl} size="sm" online={conversation.with.online} />
+                  <Avatar name={conversation.with.username} src={conversation.with.avatarUrl} icon={conversation.with.avatarIcon} size="sm" online={conversation.with.online} />
                   <div>
                     <strong>{conversation.with.username}</strong>
                     <div className="tiny muted">{conversation.with.online ? 'Online' : 'Offline'}</div>

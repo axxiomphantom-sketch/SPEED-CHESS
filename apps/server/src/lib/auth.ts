@@ -16,6 +16,8 @@ export interface PublicUser {
   status: string;
   country: string | null;
   avatarUrl: string | null;
+  /** Preset avatar id such as `knight-violet`; the client falls back to initials without either. */
+  avatarIcon: string | null;
   bio: string | null;
   title: string | null;
   plan: string;
@@ -25,12 +27,14 @@ export interface PublicUser {
 
 interface UserRow {
   id: string; username: string; email: string; role: Role; status: string; country: string | null;
-  avatar_url: string | null; bio: string | null; title: string | null; plan: string; onboarded: number;
+  avatar_url: string | null; avatar_icon: string | null; bio: string | null; title: string | null; plan: string; onboarded: number;
   created_at: string; email_verified: number; password_hash: string;
 }
 
 export interface AuthedRequest extends Request {
   user?: UserRow & { sessionId: string };
+  /** Set when the request carried a valid guest cookie. Never implies an account. */
+  guest?: { id: string; displayName: string; avatarIcon: string | null };
   /** Set when the request carried a verified Supabase access token. */
   supabaseUserId?: string;
 }
@@ -43,6 +47,7 @@ export function toPublicUser(row: Partial<UserRow> & { id: string; username: str
     status: row.status,
     country: row.country ?? null,
     avatarUrl: row.avatar_url ?? null,
+    avatarIcon: row.avatar_icon ?? null,
     bio: row.bio ?? null,
     title: row.title ?? null,
     plan: row.plan ?? 'free',

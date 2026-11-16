@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider, PrefsProvider } from './lib/auth';
+import { GuestProvider } from './lib/guest';
 import './styles/tokens.css';
 import './styles/app.css';
 
@@ -20,9 +21,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <PrefsProvider>
-          <App />
-        </PrefsProvider>
+        <GuestProvider>
+          <PrefsProvider>
+            <App />
+          </PrefsProvider>
+        </GuestProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

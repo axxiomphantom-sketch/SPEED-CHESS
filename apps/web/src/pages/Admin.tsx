@@ -206,7 +206,7 @@ export function Admin() {
                     <tr key={row.id}>
                       <td>
                         <Link to={`/players/${row.username}`} className="row" style={{ gap: 8, color: 'inherit', textDecoration: 'none' }}>
-                          <Avatar name={row.username} src={row.avatarUrl} size="sm" />
+                          <Avatar name={row.username} src={row.avatarUrl} icon={row.avatarIcon} size="sm" />
                           <span>
                             <span style={{ fontWeight: 600 }}>{row.username}</span>
                             <span className="tiny muted" style={{ display: 'block' }}>{row.email}</span>

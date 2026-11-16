@@ -17,7 +17,13 @@ export function migrate(): void {
   if (!gameColumns.includes('owner_id')) {
     db.exec('ALTER TABLE games ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL');
   }
+  if (!gameColumns.includes('guest_owner_id')) {
+    db.exec('ALTER TABLE games ADD COLUMN guest_owner_id TEXT');
+  }
   const userColumns = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map(c => c.name);
+  if (!userColumns.includes('avatar_icon')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_icon TEXT');
+  }
   if (!userColumns.includes('supabase_user_id')) {
     // SQLite cannot add a UNIQUE column via ALTER TABLE, so add it plus a unique index.
     db.exec('ALTER TABLE users ADD COLUMN supabase_user_id TEXT');

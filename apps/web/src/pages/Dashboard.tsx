@@ -21,7 +21,7 @@ interface DashboardData {
   achievements: Array<{ id: string; name: string; description: string; icon: string; tier: string; progress: number; target: number; unlocked: boolean }>;
   upcomingTournaments: Array<{ id: string; name: string; slug: string; starts_at: string; format: string; category: string; points: number }>;
   continueLesson: { slug: string; title: string; courseTitle: string } | null;
-  friends: Array<{ id: string; username: string; avatarUrl: string | null; online: boolean }>;
+  friends: Array<{ id: string; username: string; avatarUrl: string | null; avatarIcon?: string | null; online: boolean }>;
 }
 
 interface DailyPuzzle {
@@ -55,7 +55,7 @@ export function Dashboard() {
       <section className="hero-panel" style={{ marginBottom: 18 }}>
         <div className="row-between wrap" style={{ gap: 18 }}>
           <div className="row" style={{ gap: 16 }}>
-            <Avatar name={user.username} src={user.avatarUrl} size="xl" online />
+            <Avatar name={user.username} src={user.avatarUrl} icon={user.avatarIcon} size="xl" online />
             <div>
               <div className="eyebrow">{greeting}</div>
               <h1 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.1rem)', margin: '2px 0 6px' }}>{user.username}</h1>
@@ -255,7 +255,7 @@ export function Dashboard() {
                 {data.friends.map(f => (
                   <div key={f.id} className="row-between">
                     <Link to={`/players/${f.username}`} className="row" style={{ gap: 9, color: 'inherit', textDecoration: 'none' }}>
-                      <Avatar name={f.username} src={f.avatarUrl} size="sm" online={f.online} />
+                      <Avatar name={f.username} src={f.avatarUrl} icon={f.avatarIcon} size="sm" online={f.online} />
                       <span className="small" style={{ fontWeight: 600 }}>{f.username}</span>
                     </Link>
                     <Badge tone={f.online ? 'success' : 'muted'}>{f.online ? 'Online' : 'Offline'}</Badge>

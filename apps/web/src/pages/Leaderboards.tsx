@@ -8,7 +8,7 @@ import { Avatar, Badge, Card, Empty, Loading, Tabs } from '../components/ui';
 const CATEGORIES = ['bullet', 'blitz', 'rapid', 'classical'] as const;
 
 interface Entry {
-  rank: number; id: string; username: string; country: string | null; avatarUrl: string | null;
+  rank: number; id: string; username: string; country: string | null; avatarUrl: string | null; avatarIcon?: string | null;
   title: string | null; rating: number; peak: number; games: number; winRate: number; division: string;
 }
 
@@ -89,7 +89,7 @@ export function Leaderboards() {
                     </td>
                     <td>
                       <Link to={`/players/${entry.username}`} className="row" style={{ gap: 9, color: 'inherit', textDecoration: 'none' }}>
-                        <Avatar name={entry.username} src={entry.avatarUrl} size="sm" />
+                        <Avatar name={entry.username} src={entry.avatarUrl} icon={entry.avatarIcon} size="sm" />
                         <span>
                           <span style={{ fontWeight: 600 }}>{entry.username}</span>
                           {entry.title && <span className="tiny muted"> {entry.title}</span>}

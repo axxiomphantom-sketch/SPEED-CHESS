@@ -62,7 +62,7 @@ export function PlayerProfile() {
       <section className="hero-panel mb-2" style={{ marginBottom: 18 }}>
         <div className="row-between wrap" style={{ gap: 18 }}>
           <div className="row" style={{ gap: 16 }}>
-            <Avatar name={player.username} src={player.avatarUrl} size="xl" online={player.online} />
+            <Avatar name={player.username} src={player.avatarUrl} icon={player.avatarIcon} size="xl" online={player.online} />
             <div>
               <div className="row" style={{ gap: 8 }}>
                 <h1 style={{ margin: 0, fontSize: 'clamp(1.3rem, 2.4vw, 1.8rem)' }}>{player.username}</h1>

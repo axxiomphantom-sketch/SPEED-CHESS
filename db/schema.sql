@@ -5,6 +5,19 @@
 PRAGMA foreign_keys = ON;
 
 -- ---------- Identity & accounts ----------
+-- Guest sessions: a disposable identity that can own computer/local games without a users row.
+-- Keeping guests out of `users` means they are invisible to leaderboards, player search, clubs and
+-- ratings without those queries needing to filter for them.
+CREATE TABLE IF NOT EXISTS guest_sessions (
+  id            TEXT PRIMARY KEY,
+  token_hash    TEXT NOT NULL UNIQUE,
+  display_name  TEXT NOT NULL,
+  avatar_icon   TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_guest_expires ON guest_sessions(expires_at);
+
 CREATE TABLE IF NOT EXISTS users (
   id                TEXT PRIMARY KEY,
   username          TEXT NOT NULL UNIQUE,
@@ -20,7 +33,8 @@ CREATE TABLE IF NOT EXISTS users (
   role              TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player','coach','organizer','moderator','admin')),
   status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','restricted','suspended','deleted')),
   country           TEXT,
-  avatar_url        TEXT,
+  avatar_url        TEXT,                        -- uploaded photo under /uploads, or NULL
+  avatar_icon       TEXT,                        -- preset id (e.g. knight-violet); photo wins if both set
   bio               TEXT,
   title             TEXT,                        -- self-declared/FIDE-style title, informational only
   birth_year        INTEGER,
@@ -99,6 +113,9 @@ CREATE TABLE IF NOT EXISTS games (
   white_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
   black_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
   owner_id       TEXT REFERENCES users(id) ON DELETE SET NULL, -- who created it: lets the creator review a local/computer game
+  -- Owner as a guest session. A separate column rather than overloading owner_id, because owner_id
+  -- has a foreign key to users(id) and a guest has no users row to point at.
+  guest_owner_id TEXT,  -- no FK: this table is created before guest_sessions
   white_name     TEXT NOT NULL,
   black_name     TEXT NOT NULL,
   white_rating   REAL,
