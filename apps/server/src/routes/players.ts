@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db, nowIso } from '../db/index.js';
 import { requireAuth, type AuthedRequest } from '../lib/auth.js';
+import { isAvatarIcon } from '../lib/avatarIcons.js';
 import { allRatings } from '../lib/service.js';
 import { CATEGORIES, DIVISIONS, divisionFor } from '../lib/ratings.js';
 import { hub } from '../services/hub.js';
@@ -105,13 +106,48 @@ meRouter.post('/avatar', requireAuth, (req: AuthedRequest, res) => {
   const filename = `avatar-${req.user!.id}-${Date.now()}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`;
   fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
   const url = `/uploads/${filename}`;
-  db.prepare('UPDATE users SET avatar_url = ?, updated_at = ? WHERE id = ?').run(url, nowIso(), req.user!.id);
+  // Setting a photo clears the preset: `Avatar` prefers a photo, so leaving a stale icon behind
+  // would mean "remove photo" silently resurrected an avatar the user had moved on from.
+  db.prepare('UPDATE users SET avatar_url = ?, avatar_icon = NULL, updated_at = ? WHERE id = ?')
+    .run(url, nowIso(), req.user!.id);
   // Remove the previous avatar file if we generated it.
   const previous = req.user!.avatar_url;
   if (previous?.startsWith('/uploads/avatar-')) {
     try { fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(previous))); } catch { /* already gone */ }
   }
   res.json({ ok: true, avatarUrl: url });
+});
+
+/**
+ * Chooses a preset avatar.
+ *
+ * The id is validated against the shared catalog rather than stored blindly: an unknown id would
+ * render as an empty circle, which looks like a bug to the player who picked it.
+ */
+meRouter.post('/avatar/icon', requireAuth, (req: AuthedRequest, res) => {
+  const schema = z.object({ icon: z.string().trim().min(1).max(40) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Choose an avatar' });
+  if (!isAvatarIcon(parsed.data.icon)) return res.status(400).json({ error: 'Unknown avatar choice' });
+  // A chosen preset replaces any uploaded photo, mirroring the upload route clearing the preset.
+  const previous = req.user!.avatar_url;
+  db.prepare('UPDATE users SET avatar_icon = ?, avatar_url = NULL, updated_at = ? WHERE id = ?')
+    .run(parsed.data.icon, nowIso(), req.user!.id);
+  if (previous?.startsWith('/uploads/avatar-')) {
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(previous))); } catch { /* already gone */ }
+  }
+  res.json({ ok: true, avatarIcon: parsed.data.icon });
+});
+
+/** Removes both a photo and a preset, returning the account to initials. */
+meRouter.delete('/avatar', requireAuth, (req: AuthedRequest, res) => {
+  const previous = req.user!.avatar_url;
+  db.prepare('UPDATE users SET avatar_url = NULL, avatar_icon = NULL, updated_at = ? WHERE id = ?')
+    .run(nowIso(), req.user!.id);
+  if (previous?.startsWith('/uploads/avatar-')) {
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(previous))); } catch { /* already gone */ }
+  }
+  res.json({ ok: true });
 });
 
 meRouter.patch('/onboarding', requireAuth, (req: AuthedRequest, res) => {

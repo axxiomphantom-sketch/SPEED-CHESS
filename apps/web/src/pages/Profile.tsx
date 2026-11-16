@@ -4,6 +4,7 @@ import { Camera, Save, ShieldCheck, Upload, User as UserIcon } from 'lucide-reac
 import { api, ApiError, formatDate } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Alert, Avatar, Badge, Button, Card, CardHead, Field, Tabs } from '../components/ui';
+import { AvatarPicker } from '../components/AvatarPicker';
 
 export function Profile() {
   const { user, refresh } = useAuth();
@@ -14,7 +15,6 @@ export function Profile() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -50,18 +50,7 @@ export function Profile() {
     finally { setSaving(false); }
   };
 
-  const uploadAvatar = async (file: File) => {
-    setUploading(true); setError(''); setNotice('');
-    try {
-      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Choose a PNG, JPEG or WebP image.');
-      if (file.size > 8 * 1024 * 1024) throw new Error('That image is too large — choose one under 8 MB.');
-      const dataUrl = await resizeToDataUrl(file, 512);
-      await api.post('/me/avatar', { dataUrl });
-      setNotice('Avatar updated.');
-      await refresh();
-    } catch (err) { setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Upload failed.'); }
-    finally { setUploading(false); }
-  };
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const killSession = async (id: string) => {
     try { await api.del(`/auth/sessions/${id}`); setSessions(prev => prev.filter(s => s.id !== id)); setNotice('Session signed out.'); }
@@ -90,19 +79,29 @@ export function Profile() {
         { id: 'security', label: 'Security' },
       ]} />
 
+      <AvatarPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        photoUrl={user.avatarUrl}
+        icon={user.avatarIcon ?? null}
+        name={user.username}
+        onSaved={() => { void refresh(); }}
+      />
+
       {tab === 'profile' && (
         <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', alignItems: 'start' }}>
           <Card>
             <CardHead title="Avatar" action={<Camera size={15} style={{ color: 'var(--lavender)' }} />} />
             <div className="row" style={{ gap: 16 }}>
-              <Avatar name={user.username} src={user.avatarUrl} size="xl" />
+              <Avatar name={user.username} src={user.avatarUrl} icon={user.avatarIcon} size="xl" />
               <div>
-                <p className="small muted">A square image, at least 200×200. JPG, PNG or WebP up to 2 MB.</p>
-                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                  <Upload size={14} /> {uploading ? 'Uploading…' : 'Upload avatar'}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
-                    onChange={e => { const file = e.target.files?.[0]; if (file) uploadAvatar(file); }} />
-                </label>
+                <p className="small muted">
+                  Pick a chess piece, an abstract design, or upload your own photo.
+                  JPG, PNG or WebP up to 8 MB.
+                </p>
+                <Button size="sm" variant="secondary" icon={<Upload size={14} />} onClick={() => setPickerOpen(true)}>
+                  Change avatar
+                </Button>
               </div>
             </div>
             <div className="mt-3">
@@ -185,19 +184,4 @@ export function Profile() {
       )}
     </div>
   );
-}
-
-/** Downscale in the browser so uploads stay small and fast. */
-async function resizeToDataUrl(file: File, maxSize: number): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
-  const width = Math.round(bitmap.width * scale);
-  const height = Math.round(bitmap.height * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Your browser cannot process images.');
-  context.drawImage(bitmap, 0, 0, width, height);
-  return canvas.toDataURL('image/jpeg', 0.86);
 }

@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import { analyseGame, chooseComputerMove, levelConfig, LEVELS } from '@speed-chess/engine';
 import { db, nowIso } from '../db/index.js';
 import { requireAuth, type AuthedRequest } from '../lib/auth.js';
+import { guestOwnsGame } from '../lib/guest.js';
 import { CATEGORIES, TIME_CONTROLS, categoryFor, divisionFor, type Category } from '../lib/ratings.js';
 import {
   applyMove, createGame, declineDraw, finishGame, gameById, gamePayload, movesFor, offerDraw, resign, sideOf,
@@ -22,11 +23,17 @@ export const playRouter = Router();
  * - A private game or a finished casual/local/computer game belongs to its players only.
  */
 export function readable(
-  game: { is_private: number; status: string; mode: string; white_id: string | null; black_id: string | null; owner_id?: string | null },
+  game: {
+    is_private: number; status: string; mode: string;
+    white_id: string | null; black_id: string | null;
+    owner_id?: string | null; guest_owner_id?: string | null;
+  },
   userId?: string,
+  guestId?: string | null,
 ) {
   if (sideOf(game as never, userId) !== null) return true;
   if (game.owner_id && game.owner_id === userId) return true;
+  if (guestId && game.guest_owner_id && game.guest_owner_id === guestId) return true;
   if (game.is_private) return false;
   if (game.status === 'active') return true;
   return game.mode === 'online' || game.mode === 'tournament';
@@ -58,17 +65,40 @@ playRouter.get('/levels', (_req, res) => {
   res.json({ levels: LEVELS, timeControls: TIME_CONTROLS });
 });
 
-/** Starts a game against the computer, local hot-seat, or generates a private online invite. */
-playRouter.post('/games', requireAuth, (req: AuthedRequest, res) => {
+/**
+ * Starts a game against the computer, local hot-seat, or generates a private online invite.
+ *
+ * Not behind `requireAuth`: a guest may play the computer or a friend on the same device. Online and
+ * rated games still require an account, because those write ratings and pair two people — a guest
+ * has no rating and no way to be found again.
+ */
+playRouter.post('/games', (req: AuthedRequest, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
   const body = parsed.data;
+  if (!req.user) {
+    if (body.mode === 'friend') {
+      return res.status(401).json({ error: 'Sign in to create an online game', requiresAccount: true });
+    }
+    if (!req.guest) return res.status(401).json({ error: 'Authentication required' });
+  }
   const category = (body.category ?? 'rapid') as Category;
   const seconds = body.seconds ?? TIME_CONTROLS[category].seconds;
   const increment = body.increment ?? TIME_CONTROLS[category].increment;
-  const uid = req.user!.id;
+  const uid = req.user?.id;
+  const guest = req.user ? null : req.guest;
+  const guestOwnerId = uid ? null : guest?.id ?? null;
 
   if (body.mode === 'computer') {
+    if (!uid) {
+      // A guest plays White against the engine; the game has no user owner at all.
+      const game = createGame({
+        whiteId: null, blackId: null, guestOwnerId, mode: 'computer', seconds, increment,
+        difficulty: body.difficulty ?? 'easy', rated: false,
+        whiteName: guest!.displayName,
+      });
+      return res.status(201).json({ game: gamePayload(game) });
+    }
     const game = createGame({
       whiteId: uid, blackId: null, mode: 'computer', seconds, increment,
       difficulty: body.difficulty ?? 'easy', rated: false,
@@ -77,12 +107,13 @@ playRouter.post('/games', requireAuth, (req: AuthedRequest, res) => {
   }
   if (body.mode === 'local') {
     const game = createGame({
-      whiteId: null, blackId: null, ownerId: uid, mode: 'local', seconds, increment,
+      whiteId: null, blackId: null, ownerId: uid ?? null, guestOwnerId, mode: 'local', seconds, increment,
       whiteName: 'White', blackName: 'Black',
     });
     return res.status(201).json({ game: gamePayload(game) });
   }
   // Private online game: the creator waits for an opponent to join with the invite code.
+  if (!uid) return res.status(401).json({ error: 'Sign in to create an online game', requiresAccount: true });
   const game = createGame({
     whiteId: uid, blackId: null, mode: 'online', seconds, increment,
     rated: body.rated ?? false, isPrivate: true,
@@ -138,12 +169,14 @@ gamesRouter.post('/:id/messages', requireAuth, (req: AuthedRequest, res) => {
 gamesRouter.get('/:id', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  const isPlayer = sideOf(game, req.user?.id) !== null;
-  if (!readable(game, req.user?.id)) return res.status(403).json({ error: readError(game) });
-  res.json({ game: gamePayload(game), viewerSide: sideOf(game, req.user?.id) });
+  if (!readable(game, req.user?.id, req.guest?.id)) return res.status(403).json({ error: readError(game) });
+  // A guest sits in the human seat of a computer game, which is always White.
+  const side = sideOf(game, req.user?.id);
+  const viewerSide = side ?? (guestOwnsGame(game, req.guest) ? 'w' : null);
+  res.json({ game: gamePayload(game), viewerSide });
 });
 
-gamesRouter.post('/:id/move', requireAuth, (req: AuthedRequest, res) => {
+gamesRouter.post('/:id/move', (req: AuthedRequest, res) => {
   const schema = z.object({
     from: z.string().length(2),
     to: z.string().length(2),
@@ -151,19 +184,37 @@ gamesRouter.post('/:id/move', requireAuth, (req: AuthedRequest, res) => {
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid move payload' });
-  const result = applyMove(req.params.id, req.user!.id, parsed.data.from, parsed.data.to, parsed.data.promotion);
+  const game = gameById(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  const guestOwns = !req.user && guestOwnsGame(game, req.guest);
+  if (!req.user && !guestOwns) {
+    return res.status(401).json({ error: 'Authentication required', requiresAccount: !req.guest });
+  }
+  const result = applyMove(
+    req.params.id, req.user?.id, parsed.data.from, parsed.data.to, parsed.data.promotion, guestOwns,
+  );
   if (!result.ok) return res.status(400).json({ error: result.error, game: result.game, finished: result.finished });
   res.json({ game: result.game, finished: result.finished });
 });
 
-/** Lets the server engine answer in a computer game. The client never decides engine moves. */
-gamesRouter.post('/:id/engine-move', requireAuth, (req: AuthedRequest, res) => {
+/**
+ * Lets the server engine answer in a computer game. The client never decides engine moves.
+ *
+ * Not behind `requireAuth`: a guest owns its game through `guest_owner_id`, so the ownership check
+ * below is the gate. That check is what stops one guest from driving another guest's engine.
+ */
+gamesRouter.post('/:id/engine-move', (req: AuthedRequest, res) => {
   const game = gameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
+  // Ownership is checked before anything else that depends on the position: an unauthorised caller
+  // should not learn whether the engine is on move, or any other detail of a game they do not own.
+  const requesterOwns = req.user
+    ? game.white_id === req.user.id
+    : guestOwnsGame(game, req.guest);
+  if (!requesterOwns) return res.status(403).json({ error: 'Only the player may request engine moves' });
   if (game.mode !== 'computer') return res.status(400).json({ error: 'Not a computer game' });
   if (game.status !== 'active') return res.status(400).json({ error: 'Game is finished' });
   if (game.turn !== 'b') return res.status(400).json({ error: 'The engine only moves as Black' });
-  if (game.white_id !== req.user!.id) return res.status(403).json({ error: 'Only the player may request engine moves' });
   const choice = chooseComputerMove(game.fen, game.difficulty ?? 'easy');
   if (!choice.move) return res.status(400).json({ error: 'No legal moves' });
   const result = applyMove(game.id, undefined, choice.move.from, choice.move.to, choice.move.promotion);

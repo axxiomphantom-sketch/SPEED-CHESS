@@ -27,6 +27,7 @@ export function Play() {
   const [invite, setInvite] = useState<GamePayload | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [friends, setFriends] = useState<any[]>([]);
+  const { user } = useAuth();
   const [challengeSent, setChallengeSent] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
@@ -144,7 +145,7 @@ export function Play() {
           <h1>Find a game</h1>
           <p>Rated online chess, private games with friends, a computer opponent with five real difficulty levels, or a local board for two players on one device.</p>
         </div>
-        <Link to="/history" className="btn btn-secondary btn-sm">Game history</Link>
+        {user && <Link to="/history" className="btn btn-secondary btn-sm">Game history</Link>}
       </header>
 
       {error && <div className="form-error" role="alert">{error}</div>}
@@ -248,7 +249,21 @@ export function Play() {
             </Card>
           )}
 
-          {tab === 'friend' && (
+          {!user && (tab === 'online' || tab === 'friend') && (
+            <Card>
+              <CardHead title={tab === 'online' ? 'Matchmaking needs an account' : 'Private games need an account'} />
+              <p className="small muted" style={{ marginTop: 0 }}>
+                Online chess pairs you with another person and records a rating, so it needs a
+                profile. Playing the computer or a friend on this device works as a guest.
+              </p>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <Link to="/register" className="btn btn-primary btn-sm">Create a free account</Link>
+                <Link to="/login" className="btn btn-secondary btn-sm">Sign in</Link>
+              </div>
+            </Card>
+          )}
+
+          {user && tab === 'friend' && (
             <>
               <Card>
                 <CardHead title="Create a private game" subtitle="Share the invite code — no rating is affected unless you both agree to play rated." />
@@ -290,7 +305,7 @@ export function Play() {
                     {friends.map(f => (
                       <div key={f.id} className="row-between">
                         <span className="row" style={{ gap: 9 }}>
-                          <Avatar name={f.username} src={f.avatarUrl} size="sm" online={f.online} />
+                          <Avatar name={f.username} src={f.avatarUrl} icon={f.avatarIcon} size="sm" online={f.online} />
                           <span>
                             <span style={{ display: 'block', fontWeight: 600, fontSize: '.88rem' }}>{f.username}</span>
                             <span className="tiny muted">{f.rating} blitz</span>
@@ -318,6 +333,19 @@ export function Play() {
         </div>
 
         <div className="stack">
+          {!user && (
+            <Card>
+              <CardHead title="You are playing as a guest" />
+              <p className="small muted" style={{ marginTop: 0 }}>
+                Games, ratings and puzzle progress are only saved once you have an account.
+                Everything you can play here works right now.
+              </p>
+              <Link to="/register" className="btn btn-primary btn-sm btn-block">Create a free account</Link>
+              <Link to="/login" className="btn btn-ghost btn-sm btn-block" style={{ marginTop: 6 }}>I already have one</Link>
+            </Card>
+          )}
+
+          {user && (
           <Card>
             <CardHead title="Your ratings" />
             <div className="stack" style={{ gap: 10 }}>
@@ -335,6 +363,7 @@ export function Play() {
               })}
             </div>
           </Card>
+          )}
           <Card>
             <CardHead title="Fair play" />
             <ul className="small muted" style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 6 }}>

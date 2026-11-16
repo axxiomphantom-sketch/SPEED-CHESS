@@ -98,7 +98,7 @@ export function Friends() {
             {data.friends.map(friend => (
               <Card key={friend.id} hover>
                 <div className="row" style={{ gap: 12 }}>
-                  <Avatar name={friend.username} src={friend.avatarUrl} size="lg" online={friend.online} />
+                  <Avatar name={friend.username} src={friend.avatarUrl} icon={friend.avatarIcon} size="lg" online={friend.online} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <Link to={`/players/${friend.username}`} style={{ fontWeight: 700, color: '#fff' }}>{friend.username}</Link>
                     <div className="tiny muted">{friend.rating} blitz · {friend.division}</div>
@@ -124,7 +124,7 @@ export function Friends() {
             <CardHead title="Incoming requests" />
             {!data || data.incoming.length === 0 ? <p className="small muted">No incoming requests.</p> : data.incoming.map(req => (
               <div key={req.requestId} className="list-row">
-                <Avatar name={req.username} src={req.avatarUrl} size="sm" />
+                <Avatar name={req.username} src={req.avatarUrl} icon={req.avatarIcon} size="sm" />
                 <div className="grow">
                   <Link to={`/players/${req.username}`} style={{ fontWeight: 600, color: '#fff' }}>{req.username}</Link>
                   <div className="tiny muted">{req.rating} blitz</div>
@@ -138,7 +138,7 @@ export function Friends() {
             <CardHead title="Sent requests" />
             {!data || data.outgoing.length === 0 ? <p className="small muted">No pending sent requests.</p> : data.outgoing.map(req => (
               <div key={req.requestId} className="list-row">
-                <Avatar name={req.username} src={req.avatarUrl} size="sm" />
+                <Avatar name={req.username} src={req.avatarUrl} icon={req.avatarIcon} size="sm" />
                 <div className="grow"><span style={{ fontWeight: 600 }}>{req.username}</span><div className="tiny muted">Waiting for a response</div></div>
                 <Badge tone="warning">Pending</Badge>
               </div>
@@ -182,7 +182,7 @@ export function Friends() {
           <div className="mt-2">
             {results.length === 0 ? <p className="small muted">{query.length < 2 ? 'Type at least two characters.' : 'No players found.'}</p> : results.map(player => (
               <div key={player.id} className="list-row">
-                <Avatar name={player.username} src={player.avatarUrl} size="sm" online={player.online} />
+                <Avatar name={player.username} src={player.avatarUrl} icon={player.avatarIcon} size="sm" online={player.online} />
                 <div className="grow">
                   <Link to={`/players/${player.username}`} style={{ fontWeight: 600, color: '#fff' }}>{player.username}</Link>
                   <div className="tiny muted">{player.rating} blitz{player.country ? ` · ${player.country}` : ''}</div>

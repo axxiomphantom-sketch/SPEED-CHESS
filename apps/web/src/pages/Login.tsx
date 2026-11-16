@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useGuest } from '../lib/guest';
 import {
   isSupabaseConfigured, ensureAuthConfig, sendPasswordReset, signInWithSupabase, signOutEverywhere,
 } from '../lib/supabaseAuth';
+import { Bot } from 'lucide-react';
 import { AuthShell } from '../components/AuthShell';
 import { GoogleButton } from '../components/GoogleButton';
 import { Alert, Button, Field } from '../components/ui';
@@ -17,6 +19,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [busyRecovery, setBusyRecovery] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
+  const { start: startGuest, error: guestError } = useGuest();
   const navigate = useNavigate();
   const location = useLocation() as any;
   const { user, refresh } = useAuth();
@@ -86,6 +90,19 @@ export function Login() {
     }
   };
 
+  const continueAsGuest = async () => {
+    setGuestBusy(true);
+    setError('');
+    try {
+      const started = await startGuest();
+      if (!started) { setError(guestError ?? 'Could not start a guest session.'); return; }
+      // Land on /play so the visitor sees a board immediately, not an empty dashboard.
+      navigate('/play', { replace: true });
+    } finally {
+      setGuestBusy(false);
+    }
+  };
+
   return (
     <AuthShell
       title="Welcome back"
@@ -121,6 +138,24 @@ export function Login() {
         </div>
         <Button type="submit" block loading={loading} size="lg">Sign in</Button>
       </form>
+      <div className="auth-guest">
+        <span className="tiny muted">Just want to play?</span>
+        <Button
+          type="button"
+          variant="outline"
+          block
+          loading={guestBusy}
+          onClick={continueAsGuest}
+          icon={<Bot size={16} />}
+        >
+          Continue as guest
+        </Button>
+        <span className="tiny muted">
+          Play the computer, a friend on this device, or try puzzles — no email needed.
+          Your progress is not saved until you create an account.
+        </span>
+      </div>
+
       <Alert tone="info">
         <strong style={{ display: 'block' }}>Demo accounts (seeded)</strong>
         player: demo@speedchess.local / DemoPlayer123 · admin: admin@speedchess.local / AdminSpeed123

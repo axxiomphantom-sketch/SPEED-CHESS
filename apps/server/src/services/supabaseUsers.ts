@@ -28,6 +28,7 @@ export interface LinkedUserRow {
   status: string;
   country: string | null;
   avatar_url: string | null;
+  avatar_icon: string | null;
   bio: string | null;
   title: string | null;
   plan: string;

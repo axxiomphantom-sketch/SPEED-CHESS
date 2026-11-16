@@ -107,7 +107,15 @@ function puzzleRating(rows: any[]): number {
 }
 
 /** Server-side solution validation. The client never receives the answer up front. */
-puzzlesRouter.post('/:id/check', requireAuth, (req: AuthedRequest, res) => {
+/**
+ * Validates a solver's move.
+ *
+ * Open to guests: this only compares a move against `puzzle.solution` and returns the next move, so
+ * it leaks nothing a guest could not work out from the board. Persistent progress is different —
+ * `recordAttempt` writes `puzzle_attempts` and awards achievements, so the completion branch below
+ * stays account-only.
+ */
+puzzlesRouter.post('/:id/check', (req: AuthedRequest, res) => {
   const schema = z.object({
     from: z.string().length(2), to: z.string().length(2),
     promotion: z.enum(['q', 'r', 'b', 'n']).optional(),
@@ -143,9 +151,10 @@ puzzlesRouter.post('/:id/check', requireAuth, (req: AuthedRequest, res) => {
     reply = solution[nextPly];
     chess.move(reply);
     fenAfter = chess.fen();
-  } else {
-    recordAttempt(req.user!.id, puzzle, parsed.data.hintsUsed, parsed.data.ms);
+  } else if (req.user) {
+    recordAttempt(req.user.id, puzzle, parsed.data.hintsUsed, parsed.data.ms);
   }
+  // Guests finish the puzzle but keep nothing: no row, no achievement, no rating.
   res.json({
     correct: true,
     complete: isComplete,
@@ -163,7 +172,7 @@ function hintFor(puzzle: PuzzleRow, expected: string): string {
   return 'Look for a forcing move — a check or a capture.';
 }
 
-puzzlesRouter.post('/:id/hint', requireAuth, (req: AuthedRequest, res) => {
+puzzlesRouter.post('/:id/hint', (req: AuthedRequest, res) => {
   const puzzle = db.prepare('SELECT * FROM puzzles WHERE id = ?').get(req.params.id) as PuzzleRow | undefined;
   if (!puzzle) return res.status(404).json({ error: 'Puzzle not found' });
   const solution: string[] = JSON.parse(puzzle.solution);

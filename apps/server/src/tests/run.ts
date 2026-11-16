@@ -17,6 +17,7 @@ import { generateSwissRound, startRoundGames, tournamentStandings } from '../ser
 import { seedReferenceContent } from '../db/reference.js';
 import { registerSupabaseBridgeSuite, registerRuntimeConfigSuite } from './supabaseBridge.js';
 import { registerGameChatSuite } from './gameChat.js';
+import { registerGuestSuite } from './guest.js';
 
 migrate();
 seedReferenceContent();
@@ -37,6 +38,7 @@ async function main() {
 registerSupabaseBridgeSuite();
 registerRuntimeConfigSuite();
 registerGameChatSuite();
+registerGuestSuite();
 suite('Chess rules (chess.js integration)', () => {
   test('detects checkmate — back-rank mate', () => {
     const chess = new Chess('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');

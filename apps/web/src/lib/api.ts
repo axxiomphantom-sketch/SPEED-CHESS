@@ -46,7 +46,7 @@ export type Ratings = Record<'bullet' | 'blitz' | 'rapid' | 'classical', RatingI
 
 export interface SessionUser {
   id: string; username: string; role: string; status: string; country: string | null;
-  avatarUrl: string | null; bio: string | null; title: string | null; plan: string;
+  avatarUrl: string | null; avatarIcon?: string | null; bio: string | null; title: string | null; plan: string;
   onboarded: boolean; createdAt: string; email?: string; emailVerified?: boolean;
 }
 

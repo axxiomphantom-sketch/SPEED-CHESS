@@ -77,7 +77,7 @@ export const coachingRouter = Router();
 
 coachingRouter.get('/coaches', (req: AuthedRequest, res) => {
   const rows = db.prepare(
-    `SELECT c.*, u.username, u.country, u.avatar_url, u.title,
+    `SELECT c.*, u.username, u.country, u.avatar_url, u.avatar_icon, u.title,
        (SELECT rating FROM ratings WHERE user_id = c.user_id AND category = 'classical') AS classical
      FROM coach_profiles c JOIN users u ON u.id = c.user_id WHERE c.accepting = 1 ORDER BY c.verified DESC, classical DESC`
   ).all() as any[];
@@ -86,7 +86,7 @@ coachingRouter.get('/coaches', (req: AuthedRequest, res) => {
       username: c.username, headline: c.headline, expertise: c.expertise.split(',').map((s: string) => s.trim()).filter(Boolean),
       languages: (c.languages ?? '').split(',').map((s: string) => s.trim()).filter(Boolean),
       rate: c.hourly_rate, currency: c.currency, accepting: Boolean(c.accepting), verified: Boolean(c.verified),
-      country: c.country, avatarUrl: c.avatar_url, rating: Math.round(c.classical ?? 0), title: c.title,
+      country: c.country, avatarUrl: c.avatar_url, avatarIcon: c.avatar_icon, rating: Math.round(c.classical ?? 0), title: c.title,
     })),
   });
 });
@@ -174,7 +174,7 @@ coachingRouter.post('/assignments/:id/review', requireAuth, (req: AuthedRequest,
 
 coachingRouter.get('/students', requireAuth, (req: AuthedRequest, res) => {
   const rows = db.prepare(
-    `SELECT DISTINCT u.id, u.username, u.avatar_url,
+    `SELECT DISTINCT u.id, u.username, u.avatar_url, u.avatar_icon,
        (SELECT COUNT(*) FROM assignments a2 WHERE a2.coach_id = ? AND a2.student_id = u.id) AS assignments,
        (SELECT COUNT(*) FROM assignments a3 WHERE a3.coach_id = ? AND a3.student_id = u.id AND a3.status = 'reviewed') AS reviewed
      FROM assignments a JOIN users u ON u.id = a.student_id WHERE a.coach_id = ?`

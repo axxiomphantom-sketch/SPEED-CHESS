@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { AppLayout, AuthOnly, ProtectedLayout } from './components/Layout';
+import { AppLayout, AuthOnly, GuestLayout, ProtectedLayout } from './components/Layout';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -68,12 +68,9 @@ export function App() {
         <Route element={<ProtectedLayout />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/play" element={<Play />} />
-            <Route path="/play/game/:id" element={<GameRoom />} />
             <Route path="/how-to-play" element={<HowToPlay />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/learn/lesson/:slug" element={<LessonView />} />
-            <Route path="/training" element={<Training />} />
             <Route path="/openings" element={<Openings />} />
             <Route path="/openings/:id" element={<Openings />} />
             <Route path="/analysis" element={<Analysis />} />
@@ -101,6 +98,19 @@ export function App() {
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/help" element={<Help />} />
             <Route path="/admin" element={<Admin />} />
+          </Route>
+        </Route>
+
+        {/*
+          Guest-capable routes: playing the computer or a friend on this device needs no account.
+          Everything that writes to a profile (history, ratings, friends) stays in the protected
+          block above.
+        */}
+        <Route element={<GuestLayout />}>
+          <Route element={<AppLayout />}>
+            <Route path="/play" element={<Play />} />
+            <Route path="/play/game/:id" element={<GameRoom />} />
+            <Route path="/training" element={<Training />} />
           </Route>
         </Route>
 

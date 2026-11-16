@@ -3,7 +3,8 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { Activity, Award, Bell, BookOpen, Bot, Building2, ChevronRight, Crown, Gamepad2, GraduationCap, History, LayoutDashboard, Library, LogOut, Mail, Menu, Puzzle, Search, Settings, Shield, TrendingUp, Trophy, User, Users, X, Compass, HelpCircle, PlayCircle, ScrollText } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { Avatar } from './ui';
+import { useGuest } from '../lib/guest';
+import { Avatar, Button } from './ui';
 import { BrandWordmark, Logo } from './Brand';
 
 const NAV_GROUPS = [
@@ -55,6 +56,7 @@ const MOBILE_NAV = [
 
 export function AppLayout() {
   const { user, logout, unreadNotifications } = useAuth();
+  const { guest } = useGuest();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -94,7 +96,7 @@ export function AppLayout() {
           {user ? (
             <div className="panel" style={{ padding: 10 }}>
               <Link to="/profile" className="row" style={{ color: 'inherit', textDecoration: 'none' }}>
-                <Avatar name={user.username} src={user.avatarUrl} />
+                <Avatar name={user.username} src={user.avatarUrl} icon={user.avatarIcon} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontWeight: 600, fontSize: '.86rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.username}</span>
                   <span className="tiny muted" style={{ textTransform: 'capitalize' }}>{user.plan} plan</span>
@@ -109,6 +111,24 @@ export function AppLayout() {
                 <LogOut size={14} /> Sign out
               </button>
             </div>
+          ) : guest ? (
+            <div className="panel" style={{ padding: 10 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <Avatar name={guest.displayName} icon={guest.avatarIcon} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: '.86rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {guest.displayName}
+                  </span>
+                  <span className="tiny muted">Guest · not saved</span>
+                </span>
+              </div>
+              <Link to="/register" className="btn btn-primary btn-sm btn-block" style={{ marginTop: 8 }}>
+                Create account
+              </Link>
+              <Link to="/login" className="btn btn-ghost btn-sm btn-block" style={{ marginTop: 4 }}>
+                Sign in
+              </Link>
+            </div>
           ) : (
             <Link to="/login" className="btn btn-primary btn-block">Sign in</Link>
           )}
@@ -116,6 +136,15 @@ export function AppLayout() {
       </aside>
 
       <div className="main">
+        {guest && !user && (
+          <div className="guest-banner" style={{ margin: '10px 16px 0' }}>
+            <Bot size={15} />
+            <span>You are playing as a guest — games and puzzle progress are not saved.</span>
+            <Link to="/register" className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }}>
+              Create a free account
+            </Link>
+          </div>
+        )}
         <div className="mobile-top">
           <Link to="/dashboard" className="brand" style={{ padding: 0 }}><Logo size={28} /><BrandWordmark compact /></Link>
           <div className="row" style={{ gap: 6 }}>
@@ -233,7 +262,7 @@ function GlobalTopbar() {
       <Link to="/achievements" className="btn btn-ghost btn-sm" aria-label="Achievements"><Award size={17} /></Link>
       {user && (
         <Link to="/profile" className="row" style={{ gap: 8, textDecoration: 'none', color: 'inherit' }}>
-          <Avatar name={user.username} src={user.avatarUrl} size="sm" />
+          <Avatar name={user.username} src={user.avatarUrl} icon={user.avatarIcon} size="sm" />
           <span className="small" style={{ fontWeight: 600 }}>{user.username}</span>
         </Link>
       )}
@@ -280,18 +309,56 @@ export function AuthOnly() {
 }
 
 function SignInPrompt({ from }: { from: string }) {
+  const { start, error } = useGuest();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+
+  const playAsGuest = async () => {
+    setBusy(true);
+    const started = await start();
+    setBusy(false);
+    // Straight to the board — asking a curious visitor to navigate menus is the fastest way to lose
+    // them. `/play` is guest-capable, so this never bounces back here.
+    if (started) navigate('/play');
+  };
+
   return (
     <div className="page page-narrow" style={{ paddingTop: 60 }}>
       <div className="hero-panel text-center">
         <h2>Sign in to continue</h2>
-        <p className="muted">You need a SPEED CHESS account to open this page.</p>
-        <div className="row center mt-2">
+        <p className="muted">
+          This page needs a SPEED CHESS account. You can still play the computer or a friend
+          on this device as a guest.
+        </p>
+        <div className="row center mt-2" style={{ flexWrap: 'wrap' }}>
           <Link to="/login" state={{ from }} className="btn btn-primary">Sign in</Link>
           <Link to="/register" className="btn btn-secondary">Create account</Link>
+          <Button variant="outline" onClick={playAsGuest} loading={busy} icon={<Bot size={15} />}>
+            Continue as guest
+          </Button>
         </div>
+        {error && <p className="small" style={{ color: 'var(--error)', marginTop: 12 }}>{error}</p>}
       </div>
     </div>
   );
+}
+
+/**
+ * Layout for routes a guest may use.
+ *
+ * Signed-in players get the normal shell. A visitor with no account gets the same shell so the board
+ * looks and behaves identically; the guest banner in the header is what tells them progress is not
+ * saved. Anyone else is sent to the sign-in prompt.
+ */
+export function GuestLayout() {
+  const { user, loading } = useAuth();
+  const { guest, loading: guestLoading } = useGuest();
+  const location = useLocation();
+  if (loading || guestLoading) {
+    return <div className="center" style={{ minHeight: '60vh' }}><span className="spinner" /></div>;
+  }
+  if (!user && !guest) return <SignInPrompt from={location.pathname + location.search} />;
+  return <AppLayout />;
 }
 
 export function ProtectedLayout() {
