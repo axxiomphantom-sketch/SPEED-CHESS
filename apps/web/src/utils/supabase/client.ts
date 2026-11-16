@@ -29,6 +29,18 @@ import { api } from '../../lib/api';
  * A service-role key must never reach client code; there is no code path here that could read one.
  */
 
+/**
+ * Build-time defaults from Vite.
+ *
+ * Vite inlines `VITE_`-prefixed values into the bundle, so these are the variables the project
+ * documents for the frontend. They are read here directly (rather than only via the API) so a
+ * correctly-configured build works even if the config endpoint is briefly unreachable.
+ *
+ * Vite inlines this as a string literal at build time.
+ */
+const BUILD_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const BUILD_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
 /** Shape of `GET /api/meta/config`. */
 export interface PublicConfig {
   supabase: { configured: boolean; url: string | null; publishableKey: string | null };
@@ -36,7 +48,8 @@ export interface PublicConfig {
   paymentsConfigured?: boolean;
 }
 
-let settings: { url: string; key: string } | null = null;
+let settings: { url: string; key: string } | null =
+  BUILD_URL && BUILD_KEY ? { url: BUILD_URL.trim(), key: BUILD_KEY.trim() } : null;
 let loadPromise: Promise<void> | null = null;
 
 /**
@@ -56,6 +69,10 @@ export let isSupabaseConfigured = false;
  * configured project would flash a "not configured" message on every cold load.
  */
 export let isAuthConfigLoaded = false;
+
+// The bundle already knows the VITE_ values, so the app is usable before the config request that
+// would confirm them resolves. Declared after the flags above it mutates.
+if (settings) isSupabaseConfigured = true;
 
 const listeners = new Set<() => void>();
 
@@ -85,18 +102,22 @@ export function loadAuthConfig(): Promise<void> {
       const url = config.supabase?.url?.trim();
       const key = config.supabase?.publishableKey?.trim();
       if (config.supabase?.configured && url && key) {
+        // The server's answer wins: it is the same project the API itself talks to, so the two
+        // halves cannot end up pointed at different Supabase projects.
         settings = { url, key };
         isSupabaseConfigured = true;
-      } else {
+      } else if (!settings) {
+        // Neither source has credentials: the app correctly stays on local auth.
         settings = null;
         isSupabaseConfigured = false;
       }
+      // If the endpoint says "not configured" but the build inlined values, keep the build values:
+      // an unconfigured API is the thing that is wrong, and failing here would hide that.
     } catch {
-      // The API is unreachable or returned garbage: stay on the legacy path and try again on the
-      // next call rather than caching a failure forever.
+      // The API is unreachable. Keep whatever the build provided and retry on the next call
+      // rather than caching a failure forever.
       loadPromise = null;
-      settings = null;
-      isSupabaseConfigured = false;
+      isSupabaseConfigured = Boolean(settings);
     } finally {
       isAuthConfigLoaded = true;
       publish();

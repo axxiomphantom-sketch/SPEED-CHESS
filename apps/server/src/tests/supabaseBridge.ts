@@ -12,7 +12,7 @@ import {
   SUPABASE_PASSWORD_SENTINEL, ensureLocalUser, findBySupabaseId, linkSupabaseUser, normaliseUsername,
 } from '../services/supabaseUsers.js';
 import { verifyPassword } from '../lib/password.js';
-import { config } from '../config.js';
+import { config, resolveSupabaseConfig } from '../config.js';
 
 function fakeUuid(seed: string): string {
   const hex = Buffer.from(seed).toString('hex').padEnd(32, '0').slice(0, 32);
@@ -137,29 +137,70 @@ suite('Supabase identity bridge', () => {
 }
 
 /**
- * Regression guard for the configuration bug that took three rounds to find.
+ * Regression guard for the configuration bug that took three rounds to find, plus the variable
+ * contract the project documents.
  *
  * The browser used to decide whether Supabase was available from `import.meta.env.VITE_*`, which
- * Vite inlines at build time. A build without the env file therefore folded the check to `false`
- * and tree-shook the entire Supabase SDK out of the bundle, so the app silently used local auth
- * while the server was fully configured. Nothing failed loudly; the two halves simply disagreed.
+ * Vite inlines at build time. A build without an env file folded the check to `false` and
+ * tree-shook the whole Supabase SDK out of the bundle, so the app silently used local auth while
+ * the server was fully configured.
  *
- * The client now reads `GET /api/meta/config` at runtime. These assertions pin down the contract
- * that made it possible: the endpoint must report the truth, and it must expose the *publishable*
- * key (a browser cannot reach Supabase without it) while never exposing a secret.
+ * These tests assert the *rule*, not the ambient environment: they must pass on a machine with no
+ * `.env` file at all, which is the situation a fresh clone or CI is in. An earlier version of this
+ * suite asserted that credentials were configured, so it failed for the wrong reason.
  */
 export function registerRuntimeConfigSuite(): void {
 suite('Runtime auth configuration', () => {
-  test('reports Supabase as configured when both values are present', () => {
-    // The test harness runs with the same env loader as the server.
-    const expected = Boolean(config.supabaseUrl && config.supabasePublishableKey);
-    assertEqual(
-      expected, true,
-      'the test environment must have Supabase configured, or this suite proves nothing',
-    );
+  test('the server prefers SUPABASE_* over VITE_SUPABASE_*', () => {
+    const resolved = resolveSupabaseConfig({
+      SUPABASE_URL: 'https://plain.example.co',
+      SUPABASE_PUBLISHABLE_KEY: 'plain-key',
+      VITE_SUPABASE_URL: 'https://vite.example.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'vite-key',
+    });
+    assertEqual(resolved.url, 'https://plain.example.co');
+    assertEqual(resolved.key, 'plain-key');
   });
 
-  test('exposes only the publishable key, never a secret', () => {
+  test('the server falls back to the VITE_ pair', () => {
+    const resolved = resolveSupabaseConfig({
+      VITE_SUPABASE_URL: 'https://vite.example.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'vite-key',
+    });
+    assertEqual(resolved.url, 'https://vite.example.co');
+    assertEqual(resolved.key, 'vite-key');
+  });
+
+  test('a blank value counts as unset, so it cannot mask a working VITE_ value', () => {
+    const resolved = resolveSupabaseConfig({
+      SUPABASE_URL: '   ',
+      SUPABASE_PUBLISHABLE_KEY: '',
+      VITE_SUPABASE_URL: 'https://vite.example.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'vite-key',
+    });
+    assertEqual(resolved.url, 'https://vite.example.co', 'blank SUPABASE_URL must not win');
+    assertEqual(resolved.key, 'vite-key', 'blank SUPABASE_PUBLISHABLE_KEY must not win');
+  });
+
+  test('with nothing set both values are empty, never invented', () => {
+    const resolved = resolveSupabaseConfig({});
+    assertEqual(resolved.url, '');
+    assertEqual(resolved.key, '');
+    // Whitespace is trimmed, so a stray space cannot look like a hostname or key.
+    assertEqual(resolveSupabaseConfig({ SUPABASE_URL: ' https://x.example.co ' }).url, 'https://x.example.co');
+  });
+
+  test('the configured values are a bare origin and a publishable key', () => {
+    // Skips cleanly when the environment has no credentials, instead of failing.
+    if (!config.supabaseUrl || !config.supabasePublishableKey) {
+      assert(true, 'no Supabase credentials in this environment — shape checks skipped');
+      return;
+    }
+    assert(!config.supabaseUrl.includes('/rest/v1'), 'a /rest/v1 suffix breaks the auth client');
+    assert(!config.supabaseUrl.endsWith('/'), 'a trailing slash produces // in auth URLs');
+    assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.supabaseUrl),
+      `unexpected URL shape: ${config.supabaseUrl}`);
+
     const key = config.supabasePublishableKey;
     assert(key.startsWith('sb_publishable_') || key.split('.').length === 3,
       'the exposed key must be a publishable/anon key');
@@ -169,13 +210,7 @@ suite('Runtime auth configuration', () => {
       const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8')) as { role?: string };
       assert(decoded.role !== 'service_role', 'a service-role key must never reach the browser');
     }
-    assert(!/service_role/.test(config.supabasePublishableKey), 'no service_role marker in the key');
-  });
-
-  test('the project URL is a bare origin, not a REST path', () => {
-    assert(!config.supabaseUrl.includes('/rest/v1'), 'a /rest/v1 suffix breaks the auth client');
-    assert(!config.supabaseUrl.endsWith('/'), 'a trailing slash produces // in auth URLs');
-    assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.supabaseUrl), `unexpected shape: ${config.supabaseUrl}`);
+    assert(!/service_role/.test(key), 'no service_role marker in the key');
   });
 });
 }
